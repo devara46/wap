@@ -215,11 +215,21 @@ def batch_process(
             if not rotate
             else f'{dest}/{Path(image).name}'
         )
+        
+        file_path = Path(fname)
+        counter = 1
+        
+        while file_path.exists():
+            file_path = file_path.with_name(
+                f"{file_path.stem}_{counter}{file_path.suffix}"
+            )
+            counter += 1
+
         try:
-            cv2.imwrite(fname, result_image)
-            LOGGER.info(f'Saved: {fname}')
+            cv2.imwrite(str(file_path), result_image)
+            LOGGER.info(f'Saved: {str(file_path)}')
         except Exception as e:
-            LOGGER.info(f'Failed to save image {fname}: {e}')
+            LOGGER.info(f'Failed to save image {str(file_path)}: {e}')
             
         if progress:
             progress['value'] = ((idx + 1) / total) * 100

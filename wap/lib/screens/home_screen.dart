@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io'; // ← Add this import for HttpClient, Platform, and Process
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/python_service.dart';
 import 'rename_screen.dart';
 import 'rotate_screen.dart';
+import 'dpi_conversion_screen.dart';
 import 'geo_analysis_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -13,14 +15,48 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { // ← Add "with WidgetsBindingObserver"
   bool _isServerConnected = false;
   String _status = 'Checking server connection...';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ← Now this will work
     _checkServerConnection();
+  }
+
+  @override
+  void dispose() {
+    _shutdownPythonServer();
+    WidgetsBinding.instance.removeObserver(this); // ← And this
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Handle app background/close events
+    if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
+      _shutdownPythonServer();
+    }
+  }
+
+  Future<void> _shutdownPythonServer() async {
+    try {
+      final client = HttpClient();
+      // Set timeout on the client instead of the request
+      client.connectionTimeout = const Duration(seconds: 2);
+      
+      final request = await client.postUrl(Uri.parse('http://localhost:5000/shutdown'));
+      await request.close();
+      print('Python server shutdown requested');
+    } catch (e) {
+      print('Error shutting down Python server: $e');
+      // Fallback: kill python processes
+      if (Platform.isWindows) {
+        Process.run('taskkill', ['/f', '/im', 'python.exe']);
+      }
+    }
   }
 
   Future<void> _checkServerConnection() async {
@@ -118,6 +154,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Card(
               child: ListTile(
+                leading: const Icon(Icons.photo_size_select_large, color: Colors.purple),
+                title: const Text('DPI Conversion'),
+                subtitle: const Text('Convert image DPI for print quality'),
+                trailing: const Icon(Icons.arrow_forward),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DpiConversionScreen())),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Card(
+              child: ListTile(
                 leading: const Icon(Icons.map, color: Colors.green),
                 title: const Text('Geographic Analysis'),
                 subtitle: const Text('Check points outside polygons'),
@@ -130,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Instructions
             const Card(
-              color: Color.fromARGB(255, 210, 200, 255),
+              color: Colors.blue,
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(

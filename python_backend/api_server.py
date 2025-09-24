@@ -8,9 +8,12 @@ import os
 import logging
 from pathlib import Path
 from typing import Optional, Tuple
+from PIL import Image
 import tempfile
 import threading
 import time
+import atexit
+import signal
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +30,9 @@ processing_status = {
     'message': 'Ready',
     'error': None
 }
+
+# Global variable to control server shutdown
+server_running = True
 
 # Your original functions
 def decode_qr_code(image: np.ndarray, annotate: bool = False) -> tuple[str, str]:
@@ -129,6 +135,79 @@ def search_off_point(point_path: str, polygon_path: str, fname: str, level: str)
     except Exception as e:
         LOGGER.error(f'Error in search_off_point: {str(e)}')
         raise
+    
+# Add this function to your existing api_server.py
+def change_dpi_and_resize(path_in, path_out, target_dpi=(300, 300)):
+    """Change DPI and resize image while maintaining physical dimensions"""
+    try:
+        img = Image.open(path_in)
+
+        # Get current DPI from metadata (default to 150 if not available)
+        current_dpi = img.info.get("dpi", (150, 150))
+        print(f"Current DPI: {current_dpi}")
+
+        # Compute physical size in inches (based on current DPI)
+        width_inch = img.width / current_dpi[0]
+        height_inch = img.height / current_dpi[1]
+
+        # Compute new pixel dimensions based on target DPI
+        new_width = int(width_inch * target_dpi[0])
+        new_height = int(height_inch * target_dpi[1])
+
+        # Resize image
+        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        # Create output directory if it doesn't exist
+        os.makedirs(os.path.dirname(path_out), exist_ok=True)
+
+        # Save with new DPI
+        img_resized.save(path_out, dpi=target_dpi)
+
+        return True, f"Saved {path_out} with new DPI: {target_dpi}"
+    except Exception as e:
+        return False, f"Error processing {path_in}: {str(e)}"
+
+def batch_convert_dpi(source_dir, dest_dir, target_dpi=(200, 200)):
+    """Batch convert DPI for all images in a directory"""
+    try:
+        # Supported image extensions
+        image_extensions = ('.jpg', '.jpeg', '.png', '.tiff', '.bmp')
+        source_path = Path(source_dir)
+        
+        # Find all image files
+        image_files = [f for f in source_path.rglob('*') if f.suffix.lower() in image_extensions]
+        
+        if not image_files:
+            return False, "No image files found in source directory"
+
+        results = {
+            'processed': 0,
+            'failed': 0,
+            'errors': [],
+            'total': len(image_files)
+        }
+
+        for image_path in image_files:
+            # Create output path maintaining directory structure
+            relative_path = image_path.relative_to(source_path)
+            output_path = Path(dest_dir) / relative_path
+            
+            success, message = change_dpi_and_resize(
+                str(image_path), 
+                str(output_path), 
+                target_dpi
+            )
+            
+            if success:
+                results['processed'] += 1
+            else:
+                results['failed'] += 1
+                results['errors'].append(message)
+
+        return True, results
+        
+    except Exception as e:
+        return False, f"Batch processing error: {str(e)}"
 
 # Flask API endpoints
 @app.route('/health', methods=['GET'])
@@ -348,6 +427,109 @@ def batch_rotate_endpoint():
         processing_status['is_processing'] = False
         return jsonify({'error': str(e)}), 500
 
+# Add this endpoint to your Flask app
+@app.route('/convert_dpi', methods=['POST'])
+def convert_dpi_endpoint():
+    """Convert DPI for images"""
+    global processing_status
+
+    if processing_status['is_processing']:
+        return jsonify({'error': 'Another process is already running'}), 400
+
+    try:
+        data = request.get_json()
+        source_dir = data.get('source_dir')
+        dest_dir = data.get('dest_dir')
+        target_dpi = data.get('target_dpi', 200)
+        
+        if not source_dir or not dest_dir:
+            return jsonify({'error': 'Source and destination directories required'}), 400
+        
+        # Reset processing status
+        processing_status = {
+            'is_processing': True,
+            'current': 0,
+            'total': 0,
+            'message': 'Starting DPI conversion...',
+            'error': None
+        }
+
+        # Start processing in background thread
+        thread = threading.Thread(
+            target=run_dpi_conversion_background,
+            args=(source_dir, dest_dir, target_dpi),
+            daemon=True
+        )
+        thread.start()
+
+        return jsonify({
+            'message': 'DPI conversion started in background',
+            'status': 'started'
+        })
+
+    except Exception as e:
+        processing_status['error'] = str(e)
+        processing_status['is_processing'] = False
+        return jsonify({'error': str(e)}), 500
+
+def run_dpi_conversion_background(source_dir, dest_dir, target_dpi):
+    """Run DPI conversion in background with progress updates"""
+    global processing_status
+    
+    try:
+        # Supported image extensions
+        image_extensions = ('.jpg', '.jpeg', '.png', '.tiff', '.bmp')
+        source_path = Path(source_dir)
+        
+        # Find all image files
+        image_files = [f for f in source_path.rglob('*') if f.suffix.lower() in image_extensions]
+        
+        processing_status['total'] = len(image_files)
+        processing_status['message'] = f'Found {len(image_files)} images to process'
+        
+        if not image_files:
+            processing_status['message'] = 'No image files found'
+            processing_status['is_processing'] = False
+            return
+        
+        # Create destination directory
+        os.makedirs(dest_dir, exist_ok=True)
+        
+        processed_count = 0
+        for idx, image_path in enumerate(image_files):
+            processing_status['current'] = idx + 1
+            processing_status['message'] = f'Processing {image_path.name}'
+            
+            # Create output path maintaining directory structure
+            relative_path = image_path.relative_to(source_path)
+            output_path = Path(dest_dir) / relative_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Process each image
+            success, message = change_dpi_and_resize(
+                str(image_path), 
+                str(output_path), 
+                (target_dpi, target_dpi)
+            )
+            
+            if success:
+                processed_count += 1
+                print(f"✓ {image_path.name} -> DPI {target_dpi}")
+            else:
+                print(f"✗ {image_path.name}: {message}")
+            
+            # Small delay
+            time.sleep(0.1)
+        
+        processing_status['message'] = f'DPI conversion completed! {processed_count}/{len(image_files)} images processed'
+        processing_status['current'] = len(image_files)
+        processing_status['is_processing'] = False
+        
+    except Exception as e:
+        processing_status['error'] = str(e)
+        processing_status['is_processing'] = False
+        print(f"Error in DPI conversion: {e}")
+
 @app.route('/progress', methods=['GET'])
 def get_progress():
     """Get current processing progress"""
@@ -375,6 +557,24 @@ def search_off_point_endpoint():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/shutdown', methods=['POST'])
+def shutdown_server():
+    """Gracefully shutdown the Python server"""
+    global server_running
+    LOGGER.info("Received shutdown request")
+    server_running = False
+    return jsonify({'message': 'Server shutting down'})
+
+def graceful_shutdown(signum, frame):
+    """Handle shutdown signals"""
+    global server_running
+    LOGGER.info("Received shutdown signal")
+    server_running = False
+    
+# Register signal handlers
+signal.signal(signal.SIGINT, graceful_shutdown)
+signal.signal(signal.SIGTERM, graceful_shutdown)
 
 if __name__ == '__main__':
     print("Starting Python-Flutter API Server...")
@@ -391,3 +591,36 @@ if __name__ == '__main__':
     print("=" * 50)
     
     app.run(host='0.0.0.0', port=5000, debug=False)
+    
+    # Run server with shutdown capability
+    from werkzeug.serving import make_server
+    
+    class ServerThread(threading.Thread):
+        def __init__(self):
+            threading.Thread.__init__(self)
+            self.server = make_server('0.0.0.0', 5000, app)
+            self.ctx = app.app_context()
+            self.ctx.push()
+            
+        def run(self):
+            LOGGER.info("Server starting...")
+            self.server.serve_forever()
+            
+        def shutdown(self):
+            LOGGER.info("Server shutting down...")
+            self.server.shutdown()
+    
+    # Start server thread
+    server_thread = ServerThread()
+    server_thread.start()
+    
+    # Keep main thread alive until shutdown requested
+    try:
+        while server_running:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        LOGGER.info("Keyboard interrupt received")
+    finally:
+        server_thread.shutdown()
+        server_thread.join()
+        LOGGER.info("Server stopped completely")

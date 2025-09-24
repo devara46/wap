@@ -1,54 +1,47 @@
-#!/usr/bin/env python3
-"""
-Simple server startup script
-Handles configuration and error handling
-"""
 import os
 import sys
-from api_server import app
 
-def check_dependencies():
-    """Check if required packages are installed"""
+# Add embedded Python to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+embedded_python_dir = os.path.join(current_dir, "..", "embedded_python")
+embedded_lib = os.path.join(embedded_python_dir, "Lib")
+embedded_site_packages = os.path.join(embedded_lib, "site-packages")
+
+# Add paths to sys.path
+sys.path.insert(0, current_dir)
+sys.path.insert(0, embedded_site_packages)
+sys.path.insert(0, embedded_lib)
+
+print("=== Starting Python Server ===")
+print(f"Python: {sys.executable}")
+print(f"Working dir: {os.getcwd()}")
+
+# List files in current directory for debugging
+print("Files in current directory:")
+for file in os.listdir(current_dir):
+    if file.endswith('.py'):
+        print(f"  - {file}")
+
+try:
+    # Try different import methods
     try:
-        import flask
-        import cv2
-        import geopandas
-        print("✓ All dependencies are available")
-    except ImportError as e:
-        print(f"✗ Missing dependency: {e}")
-        print("Please run: pip install -r requirements.txt")
-        sys.exit(1)
-
-def create_directories():
-    """Create necessary directories"""
-    directories = ['uploads', 'results', 'logs']
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        print(f"✓ Created directory: {directory}")
-
-def main():
-    """Main startup function"""
-    print("Starting Python-Flutter API Server...")
-    print("=" * 50)
+        # Method 1: Regular import
+        from api_server import app
+        print("API server imported using regular import")
+    except ImportError:
+        # Method 2: Absolute import
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("api_server", os.path.join(current_dir, "api_server.py"))
+        api_server = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api_server)
+        app = api_server.app
+        print("API server imported using absolute path")
     
-    # Check dependencies
-    check_dependencies()
-    
-    # Create directories
-    create_directories()
-    
-    # Start the server
-    print("✓ Server starting on http://localhost:5000")
-    print("✓ Press Ctrl+C to stop the server")
-    print("=" * 50)
-    
-    try:
-        app.run(host='0.0.0.0', port=5000, debug=False)
-    except KeyboardInterrupt:
-        print("\nServer stopped by user")
-    except Exception as e:
-        print(f"Error starting server: {e}")
-        sys.exit(1)
-
-if __name__ == '__main__':
-    main()
+    print("Starting server on http://0.0.0.0:5000")
+    app.run(host='0.0.0.0', port=5000, debug=False)
+        
+except Exception as e:
+    print(f"Error: {e}")
+    import traceback
+    traceback.print_exc()
+    input("Press Enter to exit...")

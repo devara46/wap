@@ -139,6 +139,37 @@ class PythonService {
     }
   }
 
+  // DPI conversion
+  static Future<Map<String, dynamic>> startDpiConversion({
+    required String sourceDir,
+    required String outputDir,
+    required int targetDpi,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/convert_dpi'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'source_dir': sourceDir,
+          'dest_dir': outputDir,
+          'target_dpi': targetDpi,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        return {'error': 'Server error: ${response.statusCode}'};
+      }
+    } on TimeoutException {
+      return {'error': 'Request timeout - Server took too long to respond'};
+    } on SocketException {
+      return {'error': 'Cannot connect to server'};
+    } catch (e) {
+      return {'error': 'Unexpected error: $e'};
+    }
+  }
+
   // Get progress updates
   static Stream<Map<String, dynamic>> getProgress() async* {
     while (true) {

@@ -1,18 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import cv2
-import geopandas as gpd
-import pandas as pd
-import numpy as np
 import os
 import logging
+import main_function
 from pathlib import Path
-from typing import Optional, Tuple
-from PIL import Image
-import tempfile
+
 import threading
 import time
-import atexit
 import signal
 
 # Setup logging
@@ -33,181 +28,6 @@ processing_status = {
 
 # Global variable to control server shutdown
 server_running = True
-
-# Your original functions
-def decode_qr_code(image: np.ndarray, annotate: bool = False) -> tuple[str, str]:
-    """Your existing decode_qr_code function"""
-    detector = cv2.QRCodeDetector()
-    data, vertices, _ = detector.detectAndDecode(image)
-    if vertices is not None:
-        if annotate:
-            vertices = vertices[0]
-            for i in range(len(vertices)):
-                pt1 = tuple(map(int, vertices[i]))
-                pt2 = tuple(map(int, vertices[(i + 1) % 4]))
-                cv2.line(image, pt1, pt2, (0, 255, 0), 3)
-        return data, 'Detected'
-    return '', 'Not detected'
-
-def rotate_image(image: np.ndarray, angle: int) -> np.ndarray:
-    """Your existing rotate_image function"""
-    if angle == 180:
-        return cv2.rotate(image, cv2.ROTATE_180)
-    elif angle == 90:
-        return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-    elif angle == 270:
-        return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    return image
-
-def infer_rotation(row: int, col: int) -> Optional[int]:
-    """Your existing infer_rotation function"""
-    if (row, col) == (0, 0):
-        return 180
-    elif (row, col) == (4, 0):
-        return 270
-    elif (row, col) == (0, 2):
-        return 90
-    elif (row, col) == (1, 0):
-        return 270
-    elif (row, col) == (0, 1):
-        return 180
-    elif (row, col) == (1, 4):
-        return 90
-    return None
-
-def split_image_and_detect_qr(image_path: str, rotate: bool) -> Tuple[str, np.ndarray]:
-    """Your existing split_image_and_detect_qr function"""
-    LOGGER.info(f'Processing image: {image_path}')
-    image = cv2.imread(image_path)
-    if image is None:
-        LOGGER.error(f"Failed to read image: {image_path}")
-        return '', np.array([])
-        
-    height, width, _ = image.shape
-
-    orientation = 'landscape' if width > height else 'portrait'
-    rows, cols = (3, 5) if orientation == 'landscape' else (5, 3)
-    part_h, part_w = height // rows, width // cols
-
-    rotate_angle = None
-    found_qr = None
-
-    for row in range(rows):
-        for col in range(cols):
-            part = image[row * part_h:(row + 1) * part_h, col * part_w:(col + 1) * part_w]
-            data, location = decode_qr_code(part)
-            if location == 'Detected' and len(data) >= 10:
-                angle = infer_rotation(row, col)
-                if angle:
-                    rotate_angle = angle
-                found_qr = data
-                LOGGER.info(f'QR detected in part ({row},{col}) with data: {data.split(chr(10))[0]}')
-
-    result_image = rotate_image(image, rotate_angle) if rotate and rotate_angle else image
-    return found_qr or '', result_image
-
-def find_images_in_folder(folder_path: str) -> list[Path]:
-    """Your existing find_images_in_folder function"""
-    image_extensions = ('.jpg', '.jpeg', '.png')
-    folder = Path(folder_path)
-    return [f for f in folder.rglob('*') if f.suffix.lower() in image_extensions]
-
-def search_off_point(point_path: str, polygon_path: str, fname: str, level: str):
-    """Your existing search_off_point function"""
-    LOGGER.info(f'Checking point-polygon consistency for {point_path} against {polygon_path}')
-    try:
-        point = gpd.read_file(point_path)
-        polygon = gpd.read_file(polygon_path)
-
-        colname = 'iddesa' if level=='Desa' else 'idsls'
-        gdf = gpd.sjoin(point, polygon[[colname, 'geometry']], lsuffix='pt', rsuffix='ea')
-        offside = gdf.loc[gdf[f'{colname}_pt']!=gdf[f'{colname}_ea']]
-        LOGGER.info(f'Found {len(offside)} points outside their polygon')
-
-        result = offside[[f'{colname}_pt', 'nama', 'wid']].groupby(f'{colname}_pt', as_index=False).agg(
-            count=('nama', 'count'),
-            list_id=('wid', lambda x: ', '.join(x))
-        ).rename({f'{colname}_pt': colname}, axis='columns')
-
-        result.to_excel(fname, index=False)
-        LOGGER.info(f'Saved off-point report to {fname}')
-
-    except Exception as e:
-        LOGGER.error(f'Error in search_off_point: {str(e)}')
-        raise
-    
-# Add this function to your existing api_server.py
-def change_dpi_and_resize(path_in, path_out, target_dpi=(300, 300)):
-    """Change DPI and resize image while maintaining physical dimensions"""
-    try:
-        img = Image.open(path_in)
-
-        # Get current DPI from metadata (default to 150 if not available)
-        current_dpi = img.info.get("dpi", (150, 150))
-        print(f"Current DPI: {current_dpi}")
-
-        # Compute physical size in inches (based on current DPI)
-        width_inch = img.width / current_dpi[0]
-        height_inch = img.height / current_dpi[1]
-
-        # Compute new pixel dimensions based on target DPI
-        new_width = int(width_inch * target_dpi[0])
-        new_height = int(height_inch * target_dpi[1])
-
-        # Resize image
-        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-        # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(path_out), exist_ok=True)
-
-        # Save with new DPI
-        img_resized.save(path_out, dpi=target_dpi)
-
-        return True, f"Saved {path_out} with new DPI: {target_dpi}"
-    except Exception as e:
-        return False, f"Error processing {path_in}: {str(e)}"
-
-def batch_convert_dpi(source_dir, dest_dir, target_dpi=(200, 200)):
-    """Batch convert DPI for all images in a directory"""
-    try:
-        # Supported image extensions
-        image_extensions = ('.jpg', '.jpeg', '.png', '.tiff', '.bmp')
-        source_path = Path(source_dir)
-        
-        # Find all image files
-        image_files = [f for f in source_path.rglob('*') if f.suffix.lower() in image_extensions]
-        
-        if not image_files:
-            return False, "No image files found in source directory"
-
-        results = {
-            'processed': 0,
-            'failed': 0,
-            'errors': [],
-            'total': len(image_files)
-        }
-
-        for image_path in image_files:
-            # Create output path maintaining directory structure
-            relative_path = image_path.relative_to(source_path)
-            output_path = Path(dest_dir) / relative_path
-            
-            success, message = change_dpi_and_resize(
-                str(image_path), 
-                str(output_path), 
-                target_dpi
-            )
-            
-            if success:
-                results['processed'] += 1
-            else:
-                results['failed'] += 1
-                results['errors'].append(message)
-
-        return True, results
-        
-    except Exception as e:
-        return False, f"Batch processing error: {str(e)}"
 
 # Flask API endpoints
 @app.route('/health', methods=['GET'])
@@ -267,7 +87,7 @@ def run_batch_process_background(source, dest, rotate):
     try:
         print(f"Starting batch process: source={source}, dest={dest}, rotate={rotate}")
         
-        images = find_images_in_folder(source)
+        images = main_function.find_images_in_folder(source)
         total_images = len(images)
         print(f"Found {total_images} images to process")
         
@@ -298,7 +118,7 @@ def run_batch_process_background(source, dest, rotate):
             })
             
             # Process each image
-            qr_code_data, result_image = split_image_and_detect_qr(str(image_path), rotate)
+            qr_code_data, result_image = main_function.split_image_and_detect_qr(str(image_path), rotate)
             
             if qr_code_data:
                 print(f"QR code detected: {qr_code_data.split(chr(10))[0]}")
@@ -506,7 +326,7 @@ def run_dpi_conversion_background(source_dir, dest_dir, target_dpi):
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Process each image
-            success, message = change_dpi_and_resize(
+            success, message = main_function.change_dpi_and_resize(
                 str(image_path), 
                 str(output_path), 
                 (target_dpi, target_dpi)
@@ -548,7 +368,7 @@ def search_off_point_endpoint():
             return jsonify({'error': 'Point and polygon paths required'}), 400
         
         output_filename = f'off_point_report_{level}.xlsx'
-        search_off_point(point_path, polygon_path, output_filename, level)
+        main_function.search_off_point(point_path, polygon_path, output_filename, level)
         
         return jsonify({
             'message': 'Off-point analysis completed',

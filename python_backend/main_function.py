@@ -2,14 +2,12 @@ import cv2 # type: ignore
 import geopandas as gpd # type: ignore
 import pandas as pd # type: ignore
 import numpy as np # type: ignore
+import os
+from PIL import Image
 
-from logger import logger
 from pathlib import Path
 from typing import Optional, Tuple
 from tkinter import messagebox, ttk
-
-
-LOGGER = logger()
 
 
 
@@ -113,7 +111,6 @@ def split_image_and_detect_qr(
             - The decoded QR code data as a string (empty if not found).
             - The (possibly rotated) image as a NumPy ndarray.
     """
-    LOGGER.info(f'Processing image: {image_path}')
     image = cv2.imread(image_path)
     height, width, _ = image.shape
 
@@ -140,15 +137,6 @@ def split_image_and_detect_qr(
                 if angle:
                     rotate_angle = angle
                 found_qr = data
-                LOGGER.info(
-                    f'QR detected in part ({row},{col})'
-                    f'with data: {data.split('\n')[0]}'
-                )
-                
-    if not found_qr:
-        LOGGER.info(f'No valid QR code found in {image_path}')
-    if rotate and rotate_angle:
-        LOGGER.info(f'Rotating image by {rotate_angle} degrees')
 
     result_image = rotate_image(
         image, rotate_angle
@@ -177,70 +165,6 @@ def find_images_in_folder(folder_path: str) -> list[Path]:
 
 
 
-def batch_process(
-    source: str, dest: str, rotate: bool, progress:ttk.Progressbar = None
-):
-    """
-    Batch process find_images_in_folder and use it to batch rename or rotate
-    all image in a directory
-    
-    Args:
-        source (str): Path to the source directory.
-        dest (str): Path to the destination directory.
-        rotate (bool): Batch rename if False, batch rotate if True.
-    """
-    LOGGER.info(
-        f'Starting batch process on {source}'
-        f'output to {dest}, rotate={rotate}'
-    )
-    images = find_images_in_folder(source)
-    LOGGER.info(f'Found {len(images)} images to process.')
-    
-    total = len(images)
-    for idx, image in enumerate(images):
-        qr_code_data, result_image = split_image_and_detect_qr(image, rotate)
-        
-        if not qr_code_data:
-            LOGGER.warning(f'No QR found for image: {image}')
-            continue
-        
-        fname = qr_code_data.split('\n')[0]
-        if len(fname) == 14:
-            suffix = '_WB' if fname[-1] in ('B', 'P') else '_WS'
-        elif len(fname) == 10:
-            suffix = 'WA'
-        
-        fname = (
-            f'{dest}/{fname}{suffix}{image.suffix}'
-            if not rotate
-            else f'{dest}/{Path(image).name}'
-        )
-        
-        file_path = Path(fname)
-        counter = 1
-        
-        while file_path.exists():
-            file_path = file_path.with_name(
-                f"{file_path.stem}_{counter}{file_path.suffix}"
-            )
-            counter += 1
-
-        try:
-            cv2.imwrite(str(file_path), result_image)
-            LOGGER.info(f'Saved: {str(file_path)}')
-        except Exception as e:
-            LOGGER.info(f'Failed to save image {str(file_path)}: {e}')
-            
-        if progress:
-            progress['value'] = ((idx + 1) / total) * 100
-            progress.update_idletasks()
-
-    if progress:
-            progress['value'] = 0
-            progress.update_idletasks()
-
-
-
 def search_off_point(
     point_path: str, polygon_path: str, fname: str, level :str
 ):
@@ -253,32 +177,20 @@ def search_off_point(
         polygon_path (str): Path to the polygon file.
         fname (bool): Path to save the result file.
     """
-    LOGGER.info(
-        f'Checking point-polygon consistency for {point_path}'
-        f'against {polygon_path}'
-    )
     try:
         point = gpd.read_file(point_path)
         polygon = gpd.read_file(polygon_path)
     except Exception as e:
-        LOGGER.error(f'Error reading files: {e}')
+        print(f'Error reading files: {e}')
         return
 
     colname = 'iddesa' if level=='Desa' else 'idsls'
     
     if colname not in point.columns:
-        messagebox.showerror(
-            'Error',
-            f'Column {colname} was not found in point file'
-        )
-        LOGGER.error(f'Column {colname} was not found in point file')
+        print(f'Column {colname} was not found in point file')
 
     if colname not in polygon.columns:
-        messagebox.showerror(
-            'Error',
-            f'Column {colname} was not found in polygon file'
-        )
-        LOGGER.error(f'Column {colname} was not found in polygon file')
+        print(f'Column {colname} was not found in polygon file')
 
     gdf = gpd.sjoin(
         point,
@@ -287,7 +199,6 @@ def search_off_point(
         rsuffix='ea'
     )
     offside = gdf.loc[gdf[f'{colname}_pt']!=gdf[f'{colname}_ea']]
-    LOGGER.info(f'Found {len(offside)} points outside their polygon')
 
     result = offside[[
         f'{colname}_pt', 'nama', 'wid'
@@ -297,4 +208,76 @@ def search_off_point(
     ).rename({f'{colname}_pt': colname}, axis='columns')
     
     result.to_excel(fname, index=False)
-    LOGGER.info(f'Saved off-point report to {fname}')
+    
+    # Add this function to your existing api_server.py
+def change_dpi_and_resize(path_in, path_out, target_dpi=(300, 300)):
+    """Change DPI and resize image while maintaining physical dimensions"""
+    try:
+        img = Image.open(path_in)
+
+        # Get current DPI from metadata (default to 150 if not available)
+        current_dpi = img.info.get("dpi", (150, 150))
+        print(f"Current DPI: {current_dpi}")
+
+        # Compute physical size in inches (based on current DPI)
+        width_inch = img.width / current_dpi[0]
+        height_inch = img.height / current_dpi[1]
+
+        # Compute new pixel dimensions based on target DPI
+        new_width = int(width_inch * target_dpi[0])
+        new_height = int(height_inch * target_dpi[1])
+
+        # Resize image
+        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        # Create output directory if it doesn't exist
+        os.makedirs(os.path.dirname(path_out), exist_ok=True)
+
+        # Save with new DPI
+        img_resized.save(path_out, dpi=target_dpi)
+
+        return True, f"Saved {path_out} with new DPI: {target_dpi}"
+    except Exception as e:
+        return False, f"Error processing {path_in}: {str(e)}"
+
+def batch_convert_dpi(source_dir, dest_dir, target_dpi=(200, 200)):
+    """Batch convert DPI for all images in a directory"""
+    try:
+        # Supported image extensions
+        image_extensions = ('.jpg', '.jpeg', '.png', '.tiff', '.bmp')
+        source_path = Path(source_dir)
+        
+        # Find all image files
+        image_files = [f for f in source_path.rglob('*') if f.suffix.lower() in image_extensions]
+        
+        if not image_files:
+            return False, "No image files found in source directory"
+
+        results = {
+            'processed': 0,
+            'failed': 0,
+            'errors': [],
+            'total': len(image_files)
+        }
+
+        for image_path in image_files:
+            # Create output path maintaining directory structure
+            relative_path = image_path.relative_to(source_path)
+            output_path = Path(dest_dir) / relative_path
+            
+            success, message = change_dpi_and_resize(
+                str(image_path), 
+                str(output_path), 
+                target_dpi
+            )
+            
+            if success:
+                results['processed'] += 1
+            else:
+                results['failed'] += 1
+                results['errors'].append(message)
+
+        return True, results
+        
+    except Exception as e:
+        return False, f"Batch processing error: {str(e)}"

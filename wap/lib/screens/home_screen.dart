@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io'; // ← Add this import for HttpClient, Platform, and Process
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/python_service.dart';
@@ -22,14 +22,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { /
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // ← Now this will work
+    WidgetsBinding.instance.addObserver(this);
     _checkServerConnection();
   }
 
   @override
   void dispose() {
     _shutdownPythonServer();
-    WidgetsBinding.instance.removeObserver(this); // ← And this
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 

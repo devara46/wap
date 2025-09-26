@@ -380,7 +380,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                       min: 72,
                       max: 600,
                       divisions: 528, // Fine control (600-72=528 steps)
-                      label: '${_targetDpi} DPI',
+                      label: '$_targetDpi DPI',
                       onChanged: _isProcessing ? null : (value) {
                         setState(() {
                           _targetDpi = value.round();
@@ -393,7 +393,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                       children: [
                         const Text('72 DPI'),
                         Text(
-                          '${_targetDpi} DPI',
+                          '$_targetDpi DPI',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const Text('600 DPI'),

@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import '../services/python_service.dart';
 import 'rename_screen.dart';
 import 'rotate_screen.dart';
 import 'dpi_conversion_screen.dart';
 import 'geo_analysis_screen.dart';
+import 'georef_screen.dart';
+import 'organize_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,9 +16,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { // ← Add "with WidgetsBindingObserver"
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isServerConnected = false;
-  String _status = 'Checking server connection...';
+  String _status = 'Checking backend connection...';
 
   @override
   void initState() {
@@ -68,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { /
     
     setState(() {
       _isServerConnected = result['success'] ?? false;
-      _status = result['success'] ? 'Server connected!' : result['error'];
+      _status = result['success'] ? 'Backend connected!' : result['error'];
     });
   }
 
@@ -82,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { /
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _checkServerConnection,
-            tooltip: 'Check Server Connection',
+            tooltip: 'Check Backend Connection',
           ),
         ],
       ),
@@ -106,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { /
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          _isServerConnected ? 'Server Connected' : 'Server Offline',
+                          _isServerConnected ? 'Backend Connected' : 'Backend Offline',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: _isServerConnected ? Colors.green : Colors.red,
@@ -159,6 +160,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver { /
                 subtitle: const Text('Convert image DPI for print quality'),
                 trailing: const Icon(Icons.arrow_forward),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DpiConversionScreen())),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.map, color: Colors.green),
+                title: const Text('Create World Files'),
+                subtitle: const Text('Generate georeferencing world files from GeoJSON'),
+                trailing: const Icon(Icons.arrow_forward),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeorefScreen())),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.folder, color: Colors.orange),
+                title: const Text('Organize Files by ID'),
+                subtitle: const Text('Organize files into folders based on their IDs'),
+                trailing: const Icon(Icons.arrow_forward),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrganizeScreen())),
               ),
             ),
 

@@ -7,7 +7,7 @@ from PIL import Image
 
 from pathlib import Path
 from typing import Optional, Tuple
-from tkinter import messagebox, ttk
+from shapely.geometry import box
 
 
 
@@ -281,3 +281,259 @@ def batch_convert_dpi(source_dir, dest_dir, target_dpi=(200, 200)):
         
     except Exception as e:
         return False, f"Batch processing error: {str(e)}"
+
+def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_extension: str = 'jgw', expand_percentage: float = 0.05):
+    """
+    Create world files from geographic data (GeoJSON, GPKG, SHP) with proper georeferencing.
+    
+    Args:
+        geojson_path (str): Path to the geographic data file (GeoJSON, GPKG, SHP)
+        output_dir (str): Directory to save the world files
+        file_extension (str): File extension for world files (default: 'jgw')
+        expand_percentage (float): Percentage to expand bounds (default: 0.05 for 5%)
+    
+    Returns:
+        dict: Results containing count of created files and any errors
+    """
+    try:
+        import geopandas as gpd
+        from shapely.geometry import box
+        import pandas as pd
+        import os
+        
+        # Validate expand_percentage
+        if not isinstance(expand_percentage, (int, float)) or expand_percentage < 0:
+            return {
+                'success': False,
+                'error': f'Invalid expand percentage: {expand_percentage}. Must be a non-negative number.',
+                'created_files': [],
+                'total_files': 0
+            }
+        
+        # Determine file type and load accordingly
+        file_ext = os.path.splitext(geojson_path)[1].lower()
+        
+        if file_ext == '.geojson' or file_ext == '.json':
+            gdf = gpd.read_file(geojson_path)
+        elif file_ext == '.gpkg':
+            gdf = gpd.read_file(geojson_path)
+        elif file_ext == '.shp':
+            gdf = gpd.read_file(geojson_path)
+        else:
+            return {
+                'success': False,
+                'error': f'Unsupported file format: {file_ext}. Supported formats: .geojson, .gpkg, .shp',
+                'created_files': [],
+                'total_files': 0
+            }
+        
+        # Check if the file contains geometry data
+        if gdf.empty:
+            return {
+                'success': False,
+                'error': 'The selected file contains no geometry data',
+                'created_files': [],
+                'total_files': 0
+            }
+        
+        # Check for required column
+        if 'idsls' not in gdf.columns:
+            return {
+                'success': False,
+                'error': 'Required column "idsls" not found in the data',
+                'created_files': [],
+                'total_files': 0
+            }
+        
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Use user-provided expand percentage with default of 5%
+        target_ratio_landscape = (324, 272)
+        target_ratio_portrait = (278, 315)
+
+        landscape_ratio = target_ratio_landscape[0]/target_ratio_landscape[1]
+        portrait_ratio = target_ratio_portrait[0]/target_ratio_portrait[1]
+
+        landscape_margins = {
+            "upper": 14/272,
+            "lower": 11/272,
+            "left": 9.839/324,
+            "right": 86.161/324
+        }
+        portrait_margins = {
+            "upper": 15/315,
+            "lower": 90/315,
+            "left": 9.839/278,
+            "right": 9.161/278
+        }
+
+        df = pd.DataFrame()
+
+        # Iterate over each polygon
+        for index, row in gdf.iterrows():
+            polygon = row['geometry']
+            
+            # Skip if geometry is not a polygon
+            if not hasattr(polygon, 'bounds'):
+                continue
+                
+            xmin, ymin, xmax, ymax = polygon.bounds
+
+            width = xmax - xmin
+            height = ymax - ymin
+
+            # Use user-provided expand percentage
+            expand_amount = max(width, height) * expand_percentage
+
+            if width > height:
+                # --- Landscape ---
+                xmin -= expand_amount
+                xmax += expand_amount
+                width = xmax - xmin
+                height = ymax - ymin
+
+                poly_ratio = width/height
+
+                # Adjust to target ratio (landscape)
+                if poly_ratio > landscape_ratio:
+                    new_height = width * (target_ratio_landscape[1] / target_ratio_landscape[0])
+                    delta = (new_height - height) / 2
+                    ymin -= delta
+                    ymax += delta
+                else:
+                    new_width = height * (target_ratio_landscape[0] / target_ratio_landscape[1])
+                    delta = (new_width - width) / 2
+                    xmin -= delta
+                    xmax += delta
+
+                # Apply margins
+                width = xmax - xmin
+                height = ymax - ymin
+                xmin -= width * landscape_margins["left"]
+                xmax += width * landscape_margins["right"]
+                ymin -= height * landscape_margins["lower"]
+                ymax += height * landscape_margins["upper"]
+
+            else:
+                # --- Portrait ---
+                ymin -= expand_amount
+                ymax += expand_amount
+                width = xmax - xmin
+                height = ymax - ymin
+
+                poly_ratio = width/height
+
+                # Adjust to target ratio (portrait)
+                if poly_ratio > portrait_ratio:
+                    new_height = width * (target_ratio_portrait[1] / target_ratio_portrait[0])
+                    delta = (new_height - height) / 2
+                    ymin -= delta
+                    ymax += delta
+                else:
+                    new_width = height * (target_ratio_portrait[0] / target_ratio_portrait[1])
+                    delta = (new_width - width) / 2
+                    xmin -= delta
+                    xmax += delta
+
+                # Apply margins
+                width = xmax - xmin
+                height = ymax - ymin
+                xmin -= width * portrait_margins["left"]
+                xmax += width * portrait_margins["right"]
+                ymin -= height * portrait_margins["lower"]
+                ymax += height * portrait_margins["upper"]
+
+            temp = pd.DataFrame({
+                'idsls': [row['idsls']],
+                'xmin': [xmin],
+                'xmax': [xmax],
+                'ymin': [ymin],
+                'ymax': [ymax]
+            })
+
+            df = pd.concat([df, temp], ignore_index=True)
+
+        # Check if we have any valid geometries
+        if df.empty:
+            return {
+                'success': False,
+                'error': 'No valid polygon geometries found in the file',
+                'created_files': [],
+                'total_files': 0
+            }
+
+        gdf_bounds = gpd.GeoDataFrame(
+            df,
+            geometry=[box(xmin, ymin, xmax, ymax) for xmin, ymin, xmax, ymax in zip(df.xmin, df.ymin, df.xmax, df.ymax)],
+            crs=gdf.crs
+        )
+
+        # Reproject to EPSG:4326
+        gdf_bounds_4326 = gdf_bounds.to_crs(epsg=4326)
+
+        # Extract the transformed bounds
+        df[["xmin", "ymin", "xmax", "ymax"]] = gdf_bounds_4326.bounds[["minx", "miny", "maxx", "maxy"]].values
+
+        def create_world_file_from_bounds(output_path, xmin, ymin, xmax, ymax, is_landscape=True):
+            """
+            Create world file using actual image dimensions
+            """
+            # Use actual image dimensions
+            if is_landscape:
+                img_width, img_height = 3307, 2338  # Landscape orientation
+            else:
+                img_width, img_height = 2338, 3307  # Portrait orientation
+            
+            # Calculate pixel sizes
+            x_scale = (xmax - xmin) / img_width
+            y_scale = (ymin - ymax) / img_height  # Negative for north-up
+            
+            # Upper left corner coordinates (center of first pixel)
+            upper_left_x = xmin + (x_scale / 2)
+            upper_left_y = ymax + (y_scale / 2)
+            
+            with open(output_path, 'w') as f:
+                f.write(f"{x_scale:.12f}\n")
+                f.write("0.000000000000\n")
+                f.write("0.000000000000\n")
+                f.write(f"{y_scale:.12f}\n")
+                f.write(f"{upper_left_x:.12f}\n")
+                f.write(f"{upper_left_y:.12f}\n")
+
+        # Create world files
+        created_files = []
+        for index, row in df.iterrows():
+            filename = f"{row['idsls']}_WS.{file_extension}"
+            output_path = os.path.join(output_dir, filename)
+            
+            # Determine orientation based on final bounds
+            width = row['xmax'] - row['xmin']
+            height = row['ymax'] - row['ymin']
+            is_landscape = width > height
+            
+            create_world_file_from_bounds(
+                output_path=output_path,
+                xmin=row['xmin'],
+                ymin=row['ymin'],
+                xmax=row['xmax'],
+                ymax=row['ymax'],
+                is_landscape=is_landscape
+            )
+            created_files.append(filename)
+        
+        return {
+            'success': True,
+            'message': f'Successfully created {len(created_files)} world files from {os.path.basename(geojson_path)} with {expand_percentage*100}% expansion',
+            'created_files': created_files,
+            'total_files': len(created_files),
+            'file_type': file_ext,
+            'expand_percentage_used': expand_percentage
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Error creating world files: {str(e)}',
+            'created_files': [],
+            'total_files': 0
+        }

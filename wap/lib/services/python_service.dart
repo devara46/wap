@@ -170,6 +170,38 @@ class PythonService {
     }
   }
 
+  static Future<Map<String, dynamic>> createWorldFiles({
+    required String geojsonPath,
+    required String outputDir,
+    String fileExtension = 'jgw',
+    double expandPercentage = 0.05, // Add this parameter
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/create_world_files'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'geojson_path': geojsonPath,
+          'output_dir': outputDir,
+          'file_extension': fileExtension,
+          'expand_percentage': expandPercentage, // Add this line
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      return {
+        'error': 'Failed to connect to server: $e',
+      };
+    }
+  }
+
   // Get progress updates
   static Stream<Map<String, dynamic>> getProgress() async* {
     while (true) {

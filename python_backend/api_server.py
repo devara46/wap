@@ -350,6 +350,95 @@ def run_dpi_conversion_background(source_dir, dest_dir, target_dpi):
         processing_status['is_processing'] = False
         print(f"Error in DPI conversion: {e}")
 
+# Update the create_world_files endpoint in api_server.py
+
+@app.route('/create_world_files', methods=['POST'])
+def create_world_files_endpoint():
+    """Create world files from geographic data (GeoJSON, GPKG, SHP)"""
+    global processing_status
+    
+    if processing_status['is_processing']:
+        return jsonify({'error': 'Another process is already running'}), 400
+    
+    try:
+        data = request.get_json()
+        geo_file_path = data.get('geojson_path')
+        output_dir = data.get('output_dir')
+        file_extension = data.get('file_extension', 'jgw')
+        expand_percentage = data.get('expand_percentage', 0.05)  # Default to 5%
+        
+        if not geo_file_path or not output_dir:
+            return jsonify({'error': 'Geographic file path and output directory required'}), 400
+        
+        # Validate expand_percentage
+        try:
+            expand_percentage = float(expand_percentage)
+            if expand_percentage < 0:
+                return jsonify({'error': 'Expand percentage must be non-negative'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Expand percentage must be a valid number'}), 400
+        
+        # Reset processing status
+        processing_status = {
+            'is_processing': True,
+            'current': 0,
+            'total': 0,
+            'message': 'Starting world file creation...',
+            'error': None
+        }
+        
+        # Start processing in background thread
+        thread = threading.Thread(
+            target=run_world_files_creation_background,
+            args=(geo_file_path, output_dir, file_extension, expand_percentage),
+            daemon=True
+        )
+        thread.start()
+        
+        return jsonify({
+            'message': 'World file creation started in background',
+            'status': 'started',
+            'expand_percentage_used': expand_percentage
+        })
+        
+    except Exception as e:
+        processing_status['error'] = str(e)
+        processing_status['is_processing'] = False
+        return jsonify({'error': str(e)}), 500
+
+def run_world_files_creation_background(geojson_path, output_dir, file_extension, expand_percentage):
+    """Run world file creation in background with progress updates"""
+    global processing_status
+    
+    try:
+        # Process the world file creation
+        result = main_function.create_world_files_from_geojson(
+            geojson_path, 
+            output_dir, 
+            file_extension,
+            expand_percentage
+        )
+        
+        if result['success']:
+            processing_status.update({
+                'message': result['message'],
+                'current': result['total_files'],
+                'total': result['total_files'],
+                'is_processing': False,
+                'expand_percentage_used': expand_percentage
+            })
+        else:
+            processing_status.update({
+                'error': result['error'],
+                'is_processing': False
+            })
+            
+    except Exception as e:
+        processing_status.update({
+            'error': f'Error in world file creation: {str(e)}',
+            'is_processing': False
+        })
+
 @app.route('/progress', methods=['GET'])
 def get_progress():
     """Get current processing progress"""

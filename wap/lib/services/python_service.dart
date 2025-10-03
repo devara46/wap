@@ -174,7 +174,12 @@ class PythonService {
     required String geojsonPath,
     required String outputDir,
     String fileExtension = 'jgw',
-    double expandPercentage = 0.05, // Add this parameter
+    double expandPercentage = 0.05,
+    int targetDpi = 200, // Default to 200 DPI
+    int landscapeWidth = 3307, // Default dimensions
+    int landscapeHeight = 2338,
+    int portraitWidth = 2338,
+    int portraitHeight = 3307,
   }) async {
     try {
       final response = await http.post(
@@ -184,7 +189,12 @@ class PythonService {
           'geojson_path': geojsonPath,
           'output_dir': outputDir,
           'file_extension': fileExtension,
-          'expand_percentage': expandPercentage, // Add this line
+          'expand_percentage': expandPercentage,
+          'target_dpi': targetDpi,
+          'landscape_width': landscapeWidth,
+          'landscape_height': landscapeHeight,
+          'portrait_width': portraitWidth,
+          'portrait_height': portraitHeight,
         }),
       );
 
@@ -196,6 +206,57 @@ class PythonService {
         };
       }
     } catch (e) {
+      return {
+        'error': 'Failed to connect to server: $e',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> evaluateSipw({
+    required String sipwPath,
+    required String polygonPath,
+    String outputPath = 'Evaluation_Result.xlsx',
+  }) async {
+    try {
+      print('Sending request to evaluate_sipw endpoint...');
+      print('SiPW Path: $sipwPath');
+      print('Polygon Path: $polygonPath');
+      print('Output Path: $outputPath');
+
+      // First, test the connection
+      final testResponse = await http.get(
+        Uri.parse('http://localhost:5000/health'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (testResponse.statusCode != 200) {
+        return {
+          'error': 'Server is not responding. Status: ${testResponse.statusCode}',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/evaluate_sipw'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'sipw_path': sipwPath,
+          'polygon_path': polygonPath,
+          'output_path': outputPath,
+        }),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('Error in evaluateSipw: $e');
       return {
         'error': 'Failed to connect to server: $e',
       };

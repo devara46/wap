@@ -110,6 +110,7 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Geographic Analysis'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.green,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -241,9 +242,9 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 210, 200, 255),
-              child: Padding(
+            Card(
+              color: Colors.green[50],
+              child: const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

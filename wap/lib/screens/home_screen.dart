@@ -8,6 +8,7 @@ import 'dpi_conversion_screen.dart';
 import 'geo_analysis_screen.dart';
 import 'georef_screen.dart';
 import 'organize_screen.dart';
+import 'evaluation_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -78,14 +79,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Python-Flutter Integration'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.blue[700],
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _checkServerConnection,
-            tooltip: 'Check Backend Connection',
-          ),
-        ],
+        // Removed the refresh button from app bar
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -121,6 +117,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       style: const TextStyle(fontSize: 14),
                       textAlign: TextAlign.center,
                     ),
+                    if (_isServerConnected) ...[
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Check Connection'),
+                        onPressed: _checkServerConnection,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                    // Show retry button only when backend is offline
+                    if (!_isServerConnected) ...[
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Check Connection'),
+                        onPressed: _checkServerConnection,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -199,12 +220,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.analytics, color: Colors.purple),
+                title: const Text('Wilkerstat Evaluation'),
+                subtitle: const Text('Compare SiPW data with polygon data'),
+                trailing: const Icon(Icons.arrow_forward),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EvaluationScreen())),
+              ),
+            ),
+
             const SizedBox(height: 30),
 
             // Instructions
-            const Card(
-              color: Colors.blue,
-              child: Padding(
+            Card(
+              color: Colors.blue[50],
+              child: const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,10 +247,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     SizedBox(height: 8),
-                    Text('1. Start Python server first'),
-                    Text('2. Ensure server is running on http://localhost:5000'),
-                    Text('3. Select a function from the options above'),
-                    Text('4. Follow the instructions in each screen'),
+                    Text('1. Ensure server is running on http://localhost:5000'),
+                    Text('2. Select a function from the options above'),
+                    Text('3. Follow the instructions in each screen'),
                     SizedBox(height: 8),
                     Text(
                       'Note: Processing may take several minutes for large folders',

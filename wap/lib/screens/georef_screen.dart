@@ -14,8 +14,14 @@ class _GeorefScreenState extends State<GeorefScreen> {
   String _geoFilePath = '';
   String _outputDir = '';
   String _fileExtension = 'jgw';
-  double _expandPercentage = 5.0; // Default to 5%
+  double _expandPercentage = 5.0;
+  int _targetDpi = 200;
+  int _landscapeWidth = 3307;
+  int _landscapeHeight = 2338;
+  int _portraitWidth = 2338;
+  int _portraitHeight = 3307;
   bool _isProcessing = false;
+  bool _showAdvanced = false; // Advanced settings toggle
   StreamSubscription? _progressSubscription;
   Map<String, dynamic> _progress = {};
   DateTime? _processStartTime;
@@ -119,7 +125,8 @@ class _GeorefScreenState extends State<GeorefScreen> {
           _showError('Processing Failed', completionError);
         } else {
           final expandUsed = progress['expand_percentage_used'] ?? _expandPercentage / 100;
-          _showSuccess('Success', 'World file creation completed! $current world files created with ${(expandUsed * 100).toStringAsFixed(1)}% expansion');
+          final dpiUsed = progress['dpi_used'] ?? _targetDpi;
+          _showSuccess('Success', 'World file creation completed! $current world files created with ${(expandUsed * 100).toStringAsFixed(1)}% expansion and $dpiUsed DPI');
         }
         
         setState(() => _isProcessing = false);
@@ -137,9 +144,19 @@ class _GeorefScreenState extends State<GeorefScreen> {
       return;
     }
 
-    // Validate expand percentage
+    // Validate parameters
     if (_expandPercentage < 0 || _expandPercentage > 100) {
       _showError('Error', 'Expand percentage must be between 0 and 100');
+      return;
+    }
+
+    if (_targetDpi <= 0) {
+      _showError('Error', 'DPI must be positive');
+      return;
+    }
+
+    if (_landscapeWidth <= 0 || _landscapeHeight <= 0 || _portraitWidth <= 0 || _portraitHeight <= 0) {
+      _showError('Error', 'All dimensions must be positive');
       return;
     }
 
@@ -162,7 +179,12 @@ class _GeorefScreenState extends State<GeorefScreen> {
         geojsonPath: _geoFilePath,
         outputDir: _outputDir,
         fileExtension: _fileExtension,
-        expandPercentage: _expandPercentage / 100, // Convert to decimal
+        expandPercentage: _expandPercentage / 100,
+        targetDpi: _targetDpi,
+        landscapeWidth: _landscapeWidth,
+        landscapeHeight: _landscapeHeight,
+        portraitWidth: _portraitWidth,
+        portraitHeight: _portraitHeight,
       );
 
       if (startResult.containsKey('error')) {
@@ -186,7 +208,9 @@ class _GeorefScreenState extends State<GeorefScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: Text(message),
+        content: SingleChildScrollView(
+          child: Text(message),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -202,7 +226,9 @@ class _GeorefScreenState extends State<GeorefScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title, style: const TextStyle(color: Colors.green)),
-        content: Text(message),
+        content: SingleChildScrollView(
+          child: Text(message),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -238,7 +264,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: Colors.green,
               ),
             ),
             const SizedBox(height: 8),
@@ -298,13 +324,263 @@ class _GeorefScreenState extends State<GeorefScreen> {
             }
           },
           backgroundColor: Colors.grey[200],
-          selectedColor: Colors.blue[100],
-          checkmarkColor: Colors.blue,
+          selectedColor: Colors.green[100],
+          checkmarkColor: Colors.green,
           labelStyle: TextStyle(
-            color: _expandPercentage == preset['value'] ? Colors.blue : Colors.black,
+            color: _expandPercentage == preset['value'] ? Colors.green : Colors.black,
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildDpiSettings() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'DPI Settings',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            
+            // DPI Slider
+            Text(
+              '$_targetDpi DPI',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: _targetDpi.toDouble(),
+              min: 50, // Start from 50
+              max: 600,
+              divisions: (600 - 50) ~/ 10, // Calculate divisions for 10-step increments
+              label: '$_targetDpi DPI',
+              onChanged: _isProcessing ? null : (double value) {
+                setState(() {
+                  _targetDpi = value.round();
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('50 DPI', style: TextStyle(fontSize: 12)),
+                Text('300 DPI', style: TextStyle(fontSize: 12)),
+                Text('600 DPI', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // DPI Input and Presets
+            Row(
+              children: [
+                const Text('Custom DPI:'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _targetDpi.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    onChanged: (value) {
+                      final dpi = int.tryParse(value);
+                      if (dpi != null && dpi >= 50 && dpi <= 600) {
+                        setState(() {
+                          _targetDpi = dpi;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // DPI Presets - Updated to include lower values
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [50, 100, 150, 200, 300, 400, 600].map((dpi) {
+                return FilterChip(
+                  label: Text('$dpi DPI'),
+                  selected: _targetDpi == dpi,
+                  onSelected: _isProcessing ? null : (bool selected) {
+                    if (selected) {
+                      setState(() {
+                        _targetDpi = dpi;
+                      });
+                    }
+                  },
+                  backgroundColor: Colors.grey[200],
+                  selectedColor: Colors.green[100],
+                  checkmarkColor: Colors.green,
+                  labelStyle: TextStyle(
+                    color: _targetDpi == dpi ? Colors.green : Colors.black,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDimensionSettings() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Image Dimensions (pixels)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            
+            // Landscape Dimensions
+            const Text('Landscape Orientation:', style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _landscapeWidth.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Width',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      final width = int.tryParse(value);
+                      if (width != null && width > 0) {
+                        setState(() {
+                          _landscapeWidth = width;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _landscapeHeight.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Height',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      final height = int.tryParse(value);
+                      if (height != null && height > 0) {
+                        setState(() {
+                          _landscapeHeight = height;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Portrait Dimensions
+            const Text('Portrait Orientation:', style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _portraitWidth.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Width',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      final width = int.tryParse(value);
+                      if (width != null && width > 0) {
+                        setState(() {
+                          _portraitWidth = width;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _portraitHeight.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Height',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      final height = int.tryParse(value);
+                      if (height != null && height > 0) {
+                        setState(() {
+                          _portraitHeight = height;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            Text(
+              'Current settings: Landscape ${_landscapeWidth}×$_landscapeHeight, Portrait $_portraitWidth×$_portraitHeight',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedToggle() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            const Icon(Icons.settings, color: Colors.green),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Advanced Settings',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+            Switch(
+              value: _showAdvanced,
+              onChanged: _isProcessing ? null : (bool value) {
+                setState(() {
+                  _showAdvanced = value;
+                });
+              },
+              activeColor: Colors.green,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -313,6 +589,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create World Files'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.green,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -422,53 +699,71 @@ class _GeorefScreenState extends State<GeorefScreen> {
 
             const SizedBox(height: 16),
 
-            // Expand Percentage Slider
-            _buildExpandPercentageSlider(),
+            // Advanced Settings Toggle
+            _buildAdvancedToggle(),
 
-            const SizedBox(height: 8),
+            // Advanced Settings (only show when toggle is on)
+            if (_showAdvanced) ...[
+              const SizedBox(height: 16),
 
-            // Preset Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: _buildPresetButtons(),
-            ),
+              // Expand Percentage Slider
+              _buildExpandPercentageSlider(),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
-            // File Extension Selection
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'World File Extension',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _fileExtension,
-                      items: _fileExtensions.map((String extension) {
-                        return DropdownMenuItem<String>(
-                          value: extension,
-                          child: Text('.$extension'),
-                        );
-                      }).toList(),
-                      onChanged: _isProcessing ? null : (String? newValue) {
-                        setState(() {
-                          _fileExtension = newValue!;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
+              // Preset Buttons for Expand Percentage
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: _buildPresetButtons(),
+              ),
+
+              const SizedBox(height: 16),
+
+              // DPI Settings
+              _buildDpiSettings(),
+
+              const SizedBox(height: 16),
+
+              // Dimension Settings
+              _buildDimensionSettings(),
+
+              const SizedBox(height: 16),
+
+              // File Extension Selection
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'World File Extension',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _fileExtension,
+                        items: _fileExtensions.map((String extension) {
+                          return DropdownMenuItem<String>(
+                            value: extension,
+                            child: Text('.$extension'),
+                          );
+                        }).toList(),
+                        onChanged: _isProcessing ? null : (String? newValue) {
+                          setState(() {
+                            _fileExtension = newValue!;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -519,11 +814,11 @@ class _GeorefScreenState extends State<GeorefScreen> {
                           ),
                         ],
                       ),
-                      if (_expandPercentage > 0)
+                      if (_expandPercentage > 0 || _targetDpi != 200)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
                           child: Text(
-                            'Using ${_expandPercentage.toStringAsFixed(1)}% expansion',
+                            'Using ${_expandPercentage.toStringAsFixed(1)}% expansion and $_targetDpi DPI',
                             style: const TextStyle(fontSize: 12, color: Colors.green),
                           ),
                         ),
@@ -550,20 +845,11 @@ class _GeorefScreenState extends State<GeorefScreen> {
                     Text('• Select a geographic data file (GeoJSON, GPKG, or SHP)'),
                     Text('• File must contain polygon geometry and "idsls" column'),
                     Text('• Select output folder for world files'),
-                    Text('• Adjust expansion percentage as needed'),
-                    Text('• Choose appropriate world file extension'),
+                    Text('• Use advanced settings for custom DPI, dimensions, and expansion'),
                     Text('• World files will be created for each polygon feature'),
                     SizedBox(height: 8),
                     Text(
-                      'Expand Percentage: Increases bounds to ensure full coverage. Use higher values for irregular shapes.',
-                      style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
-                    ),
-                    Text(
-                      'Supported formats: GeoJSON (.geojson, .json), GeoPackage (.gpkg), Shapefile (.shp)',
-                      style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
-                    ),
-                    Text(
-                      'Supported extensions: .jgw (JPEG), .pgw (PNG), .tfw (TIFF), .gfw (GIF)',
+                      'Default settings: 200 DPI, 5% expansion, standard dimensions',
                       style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
                     ),
                   ],

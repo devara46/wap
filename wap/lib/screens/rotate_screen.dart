@@ -176,6 +176,7 @@ class _RotateScreenState extends State<RotateScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Batch Rotate Images'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.orange,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -316,9 +317,9 @@ class _RotateScreenState extends State<RotateScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 210, 200, 255),
-              child: Padding(
+            Card(
+              color: Colors.orange[50],
+              child: const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

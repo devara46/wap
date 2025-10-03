@@ -282,18 +282,30 @@ def batch_convert_dpi(source_dir, dest_dir, target_dpi=(200, 200)):
     except Exception as e:
         return False, f"Batch processing error: {str(e)}"
 
-def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_extension: str = 'jgw', expand_percentage: float = 0.05):
+def create_world_files_from_geojson(
+    geojson_path: str, 
+    output_dir: str, 
+    file_extension: str = 'jgw', 
+    expand_percentage: float = 0.05,
+    target_dpi: int = 200,
+    landscape_width: int = 3307,
+    landscape_height: int = 2338,
+    portrait_width: int = 2338,
+    portrait_height: int = 3307
+):
     """
-    Create world files from geographic data (GeoJSON, GPKG, SHP) with proper georeferencing.
+    Create world files from geographic data with configurable DPI and dimensions.
     
     Args:
-        geojson_path (str): Path to the geographic data file (GeoJSON, GPKG, SHP)
+        geojson_path (str): Path to the geographic data file
         output_dir (str): Directory to save the world files
-        file_extension (str): File extension for world files (default: 'jgw')
-        expand_percentage (float): Percentage to expand bounds (default: 0.05 for 5%)
-    
-    Returns:
-        dict: Results containing count of created files and any errors
+        file_extension (str): File extension for world files
+        expand_percentage (float): Percentage to expand bounds
+        target_dpi (int): Target DPI for the output images (default: 200)
+        landscape_width (int): Pixel width for landscape orientation (default: 3307)
+        landscape_height (int): Pixel height for landscape orientation (default: 2338)
+        portrait_width (int): Pixel width for portrait orientation (default: 2338)
+        portrait_height (int): Pixel height for portrait orientation (default: 3307)
     """
     try:
         import geopandas as gpd
@@ -301,14 +313,41 @@ def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_ext
         import pandas as pd
         import os
         
-        # Validate expand_percentage
+        # Validate parameters
         if not isinstance(expand_percentage, (int, float)) or expand_percentage < 0:
             return {
                 'success': False,
-                'error': f'Invalid expand percentage: {expand_percentage}. Must be a non-negative number.',
+                'error': f'Invalid expand percentage: {expand_percentage}. Must be non-negative.',
                 'created_files': [],
                 'total_files': 0
             }
+        
+        if target_dpi <= 0:
+            return {
+                'success': False,
+                'error': f'Invalid DPI: {target_dpi}. Must be positive.',
+                'created_files': [],
+                'total_files': 0
+            }
+        
+        # Validate dimensions
+        for dim_name, dim_value in [
+            ('landscape_width', landscape_width),
+            ('landscape_height', landscape_height),
+            ('portrait_width', portrait_width),
+            ('portrait_height', portrait_height)
+        ]:
+            if not isinstance(dim_value, int) or dim_value <= 0:
+                return {
+                    'success': False,
+                    'error': f'Invalid {dim_name}: {dim_value}. Must be positive integer.',
+                    'created_files': [],
+                    'total_files': 0
+                }
+        
+        print(f"Using DPI: {target_dpi}")
+        print(f"Landscape dimensions: {landscape_width} x {landscape_height}")
+        print(f"Portrait dimensions: {portrait_width} x {portrait_height}")
         
         # Determine file type and load accordingly
         file_ext = os.path.splitext(geojson_path)[1].lower()
@@ -476,13 +515,15 @@ def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_ext
 
         def create_world_file_from_bounds(output_path, xmin, ymin, xmax, ymax, is_landscape=True):
             """
-            Create world file using actual image dimensions
+            Create world file using user-provided image dimensions
             """
-            # Use actual image dimensions
+            # Use user-provided dimensions
             if is_landscape:
-                img_width, img_height = 3307, 2338  # Landscape orientation
+                img_width = landscape_width
+                img_height = landscape_height
             else:
-                img_width, img_height = 2338, 3307  # Portrait orientation
+                img_width = portrait_width
+                img_height = portrait_height
             
             # Calculate pixel sizes
             x_scale = (xmax - xmin) / img_width
@@ -523,11 +564,16 @@ def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_ext
         
         return {
             'success': True,
-            'message': f'Successfully created {len(created_files)} world files from {os.path.basename(geojson_path)} with {expand_percentage*100}% expansion',
+            'message': f'Successfully created {len(created_files)} world files with {target_dpi} DPI',
             'created_files': created_files,
             'total_files': len(created_files),
             'file_type': file_ext,
-            'expand_percentage_used': expand_percentage
+            'expand_percentage_used': expand_percentage,
+            'dpi_used': target_dpi,
+            'dimensions_used': {
+                'landscape': f'{landscape_width}x{landscape_height}',
+                'portrait': f'{portrait_width}x{portrait_height}'
+            }
         }
         
     except Exception as e:
@@ -536,4 +582,156 @@ def create_world_files_from_geojson(geojson_path: str, output_dir: str, file_ext
             'error': f'Error creating world files: {str(e)}',
             'created_files': [],
             'total_files': 0
+        }
+        
+def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 'Evaluation Result.xlsx') -> dict:
+    """
+    Evaluate SiPW data against polygon data and generate comparison report.
+    
+    Args:
+        sipw_path (str): Path to the SiPW Excel file
+        polygon_path (str): Path to the polygon GeoJSON file
+        output_path (str): Path for the output Excel file
+    
+    Returns:
+        dict: Results containing evaluation statistics and any errors
+    """
+    try:
+        # Check if files exist
+        if not os.path.exists(sipw_path):
+            return {
+                'success': False,
+                'error': f'SiPW file does not exist: {sipw_path}',
+                'output_file': None
+            }
+        
+        if not os.path.exists(polygon_path):
+            return {
+                'success': False,
+                'error': f'Polygon file does not exist: {polygon_path}',
+                'output_file': None
+            }
+        
+        # Read data
+        sipw = pd.read_excel(sipw_path, dtype=str)
+        sls = gpd.read_file(polygon_path)
+        
+        # Ensure required columns exist
+        if 'idsls' not in sipw.columns:
+            return {
+                'success': False,
+                'error': 'Required column "idsls" not found in SiPW file',
+                'output_file': None
+            }
+        
+        if 'idsls' not in sls.columns:
+            return {
+                'success': False,
+                'error': 'Required column "idsls" not found in polygon file',
+                'output_file': None
+            }
+        
+        # Add missing columns if needed
+        if 'kdsubsls' not in sls.columns:
+            sls['kdsubsls'] = '00'
+        if 'idsubsls' not in sls.columns:
+            sls['idsubsls'] = sls['idsls'] + sls['kdsubsls']
+        
+        # Perform evaluations
+        # 1. No geometry
+        nogeo = sls.loc[sls['geometry'].isnull(), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        
+        # 2. Duplicates
+        duplicate = sls.loc[sls.duplicated('idsubsls', keep=False), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        
+        # 3. Get common kecamatan codes
+        list_kec = sls['kdkec'].unique()
+        
+        # 4. Find differences between SiPW and polygon
+        sipw_ids = set(sipw.loc[sipw['kdkec'].isin(list_kec), 'id_subsls']) if 'id_subsls' in sipw.columns else set()
+        poly_ids = set(sls['idsubsls'])
+        
+        only_sipw = sipw_ids - poly_ids
+        only_poly = poly_ids - sipw_ids
+        
+        # 5. Create dataframes for differences
+        sipw_df = sipw.loc[sipw['id_subsls'].isin(only_sipw), ['id_subsls', 'nmkec', 'nmdesa', 'nama_sls']].copy() if 'id_subsls' in sipw.columns else pd.DataFrame()
+        poly_df = sls.loc[sls['idsubsls'].isin(only_poly), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        
+        # 6. Compare names
+        compare = pd.merge(
+            sipw[['idsls', 'nama_sls']] if 'nama_sls' in sipw.columns else pd.DataFrame(),
+            sls[['idsls', 'nmsls']],
+            on='idsls',
+            how='inner'
+        )
+        
+        if not compare.empty and 'nama_sls' in compare.columns:
+            compare = compare.loc[compare['nama_sls'] != compare['nmsls']]
+            compare = compare.rename({'nama_sls': 'nmsls_sipw', 'nmsls': 'nmsls_poly'}, axis=1)
+        else:
+            compare = pd.DataFrame()
+        
+        # Create description
+        description_data = [
+            ['Evaluation Report - SiPW vs Polygon', ''],
+            ['Generated on', pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')],
+            ['', ''],
+            ['Sheet Name', 'Description'],
+            ['Duplicate', 'Contains list of duplicated idsubsls in polygon data'],
+            ['SiPW Only', 'Contains list of subsls that only exist in SiPW data'],
+            ['Polygon Only', 'Contains list of subsls that only exist in polygon data'],
+            ['Name Differences', 'Contains list of SLS with name differences between SiPW and Polygon'],
+            ['No Geometry', 'Contains list of subsls without geometry in polygon data'],
+            ['', ''],
+            ['Summary Statistics', ''],
+            ['Total SiPW Records', len(sipw)],
+            ['Total Polygon Records', len(sls)],
+            ['Duplicated IDs', len(duplicate)],
+            ['SiPW Only Records', len(sipw_df)],
+            ['Polygon Only Records', len(poly_df)],
+            ['Name Differences', len(compare)],
+            ['Records Without Geometry', len(nogeo)]
+        ]
+        
+        description = pd.DataFrame(description_data)
+        
+        # Write to Excel
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            # Description sheet
+            description.to_excel(writer, sheet_name='Description', index=False, header=False)
+            
+            # Data sheets
+            if not duplicate.empty:
+                duplicate.to_excel(writer, sheet_name='Duplicate', index=False)
+            if not sipw_df.empty:
+                sipw_df.to_excel(writer, sheet_name='SiPW Only', index=False)
+            if not poly_df.empty:
+                poly_df.to_excel(writer, sheet_name='Polygon Only', index=False)
+            if not compare.empty:
+                compare.to_excel(writer, sheet_name='Name Differences', index=False)
+            if not nogeo.empty:
+                nogeo.to_excel(writer, sheet_name='No Geometry', index=False)
+        
+        # Return results
+        return {
+            'success': True,
+            'message': f'Evaluation completed successfully. Report saved to: {output_path}',
+            'output_file': output_path,
+            'statistics': {
+                'total_sipw': len(sipw),
+                'total_polygon': len(sls),
+                'duplicates': len(duplicate),
+                'sipw_only': len(sipw_df),
+                'polygon_only': len(poly_df),
+                'name_differences': len(compare),
+                'no_geometry': len(nogeo)
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Error during evaluation: {str(e)}',
+            'output_file': None
         }

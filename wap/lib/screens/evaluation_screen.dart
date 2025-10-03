@@ -3,73 +3,72 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/python_service.dart';
 
-class DpiConversionScreen extends StatefulWidget {
-  const DpiConversionScreen({super.key});
+class EvaluationScreen extends StatefulWidget {
+  const EvaluationScreen({super.key});
 
   @override
-  State<DpiConversionScreen> createState() => _DpiConversionScreenState();
+  State<EvaluationScreen> createState() => _EvaluationScreenState();
 }
 
-class _DpiConversionScreenState extends State<DpiConversionScreen> {
-  String _sourceDir = '';
-  String _outputDir = '';
-  int _targetDpi = 200;
-  final TextEditingController _dpiController = TextEditingController();
+class _EvaluationScreenState extends State<EvaluationScreen> {
+  String _sipwFilePath = '';
+  String _polygonFilePath = '';
+  String _outputPath = 'Evaluation_Result.xlsx';
   bool _isProcessing = false;
   StreamSubscription? _progressSubscription;
   Map<String, dynamic> _progress = {};
   DateTime? _processStartTime;
   Timer? _processTimeoutTimer;
+  Map<String, dynamic>? _statistics;
 
-  @override
-  void initState() {
-    super.initState();
-    _dpiController.text = _targetDpi.toString();
-  }
+  final List<String> _supportedPolygonFormats = ['geojson', 'json', 'gpkg', 'shp'];
+  final List<String> _supportedSipwFormats = ['xlsx', 'xls'];
 
   @override
   void dispose() {
     _progressSubscription?.cancel();
     _processTimeoutTimer?.cancel();
-    _dpiController.dispose();
     super.dispose();
   }
 
-  void _updateDpiFromTextField() {
-    final text = _dpiController.text;
-    if (text.isNotEmpty) {
-      final value = int.tryParse(text);
-      if (value != null && value >= 72 && value <= 600) {
-        setState(() {
-          _targetDpi = value;
-        });
-      } else {
-        // Reset to current value if invalid
-        _dpiController.text = _targetDpi.toString();
-      }
-    }
-  }
-
-  Future<void> _selectSourceDirectory() async {
-    final String? selectedDir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select source folder with images',
+  Future<void> _selectSipwFile() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _supportedSipwFormats,
+      dialogTitle: 'Select SiPW Excel File',
     );
     
-    if (selectedDir != null) {
+    if (result != null && result.files.single.path != null) {
       setState(() {
-        _sourceDir = selectedDir;
+        _sipwFilePath = result.files.single.path!;
       });
     }
   }
 
-  Future<void> _selectOutputDirectory() async {
-    final String? selectedDir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select output folder for DPI-converted images',
+  Future<void> _selectPolygonFile() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _supportedPolygonFormats,
+      dialogTitle: 'Select Polygon File',
     );
     
-    if (selectedDir != null) {
+    if (result != null && result.files.single.path != null) {
       setState(() {
-        _outputDir = selectedDir;
+        _polygonFilePath = result.files.single.path!;
+      });
+    }
+  }
+
+  Future<void> _selectOutputFile() async {
+    final String? selectedPath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Evaluation Report As',
+      fileName: _outputPath,
+      allowedExtensions: ['xlsx'],
+    );
+    
+    if (selectedPath != null) {
+      setState(() {
+        _outputPath = selectedPath.endsWith('.xlsx') ? selectedPath : '$selectedPath.xlsx';
       });
     }
   }
@@ -85,15 +84,14 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
         return;
       }
 
-      setState(() => _progress = progress);
+      setState(() {
+        _progress = progress;
+        _statistics = progress['statistics'];
+      });
 
-      final current = progress['current'] as int? ?? 0;
-      final total = progress['total'] as int? ?? 0;
       final isProcessing = progress['is_processing'] as bool? ?? true;
       
-      final bool isComplete = !isProcessing || (total > 0 && current >= total);
-
-      if (isComplete) {
+      if (!isProcessing) {
         _progressSubscription?.cancel();
         _processTimeoutTimer?.cancel();
         
@@ -101,7 +99,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
         if (completionError != null && completionError.isNotEmpty) {
           _showError('Processing Failed', completionError);
         } else {
-          _showSuccess('Success', 'DPI conversion completed! $current/$total images processed');
+          _showSuccess('Success', 'Evaluation completed successfully! Report saved to $_outputPath');
         }
         
         setState(() => _isProcessing = false);
@@ -113,38 +111,32 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
     });
   }
 
-  Future<void> _startDpiConversion() async {
-    if (_sourceDir.isEmpty || _outputDir.isEmpty) {
-      _showError('Error', 'Please select both source and output directories');
-      return;
-    }
-
-    // Validate DPI input
-    _updateDpiFromTextField();
-    if (_targetDpi < 72 || _targetDpi > 600) {
-      _showError('Invalid DPI', 'Please enter a DPI value between 72 and 600');
+  Future<void> _startEvaluation() async {
+    if (_sipwFilePath.isEmpty || _polygonFilePath.isEmpty) {
+      _showError('Error', 'Please select both SiPW file and polygon file');
       return;
     }
 
     setState(() {
       _isProcessing = true;
       _progress = {};
+      _statistics = null;
       _processStartTime = DateTime.now();
     });
 
-    _processTimeoutTimer = Timer(const Duration(minutes: 15), () {
+    _processTimeoutTimer = Timer(const Duration(minutes: 5), () {
       if (_isProcessing) {
         _progressSubscription?.cancel();
-        _showError('Timeout', 'DPI conversion took too long and was cancelled');
+        _showError('Timeout', 'Evaluation took too long and was cancelled');
         setState(() => _isProcessing = false);
       }
     });
 
     try {
-      final startResult = await PythonService.startDpiConversion(
-        sourceDir: _sourceDir,
-        outputDir: _outputDir,
-        targetDpi: _targetDpi,
+      final startResult = await PythonService.evaluateSipw(
+        sipwPath: _sipwFilePath,
+        polygonPath: _polygonFilePath,
+        outputPath: _outputPath,
       );
 
       if (startResult.containsKey('error')) {
@@ -168,7 +160,9 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: Text(message),
+        content: SingleChildScrollView(
+          child: Text(message),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -184,7 +178,30 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title, style: const TextStyle(color: Colors.green)),
-        content: Text(message),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(message),
+              if (_statistics != null) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Evaluation Summary:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text('• Total SiPW Records: ${_statistics!['total_sipw']}'),
+                Text('• Total Polygon Records: ${_statistics!['total_polygon']}'),
+                Text('• Duplicated IDs: ${_statistics!['duplicates']}'),
+                Text('• SiPW Only Records: ${_statistics!['sipw_only']}'),
+                Text('• Polygon Only Records: ${_statistics!['polygon_only']}'),
+                Text('• Name Differences: ${_statistics!['name_differences']}'),
+                Text('• Records Without Geometry: ${_statistics!['no_geometry']}'),
+              ],
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -203,11 +220,58 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
     return minutes > 0 ? '${minutes}m ${seconds}s' : '${seconds}s';
   }
 
+  Widget _buildStatisticsCard() {
+    if (_statistics == null) return const SizedBox();
+
+    return Card(
+      color: Colors.blue[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Evaluation Summary',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            _buildStatItem('Total SiPW Records', _statistics!['total_sipw'].toString()),
+            _buildStatItem('Total Polygon Records', _statistics!['total_polygon'].toString()),
+            _buildStatItem('Duplicated IDs', _statistics!['duplicates'].toString(), isWarning: true),
+            _buildStatItem('SiPW Only Records', _statistics!['sipw_only'].toString(), isWarning: true),
+            _buildStatItem('Polygon Only Records', _statistics!['polygon_only'].toString(), isWarning: true),
+            _buildStatItem('Name Differences', _statistics!['name_differences'].toString(), isWarning: true),
+            _buildStatItem('No Geometry Records', _statistics!['no_geometry'].toString(), isWarning: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, {bool isWarning = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isWarning && int.parse(value) > 0 ? Colors.red : Colors.green,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DPI Conversion'),
+        title: const Text('SiPW vs Polygon Evaluation'),
         foregroundColor: Colors.white,
         backgroundColor: Colors.purple,
         leading: IconButton(
@@ -220,7 +284,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Source Directory Input
+            // SiPW File Input
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -228,7 +292,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Source Directory',
+                      'SiPW Excel File',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 8),
@@ -236,17 +300,18 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            _sourceDir.isEmpty ? 'No directory selected' : _sourceDir,
+                            _sipwFilePath.isEmpty ? 'No file selected' : _sipwFilePath.split('/').last,
                             style: TextStyle(
-                              color: _sourceDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _sipwFilePath.isEmpty ? Colors.grey : Colors.blue,
+                              fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
-                          onPressed: _isProcessing ? null : _selectSourceDirectory,
-                          child: const Text('Browse'),
+                          onPressed: _selectSipwFile,
+                          child: const Text('Select File'),
                         ),
                       ],
                     ),
@@ -257,7 +322,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
 
             const SizedBox(height: 16),
 
-            // Output Directory Input
+            // Polygon File Input
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -265,7 +330,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Output Directory',
+                      'Polygon File',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 8),
@@ -273,17 +338,18 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            _outputDir.isEmpty ? 'No directory selected' : _outputDir,
+                            _polygonFilePath.isEmpty ? 'No file selected' : _polygonFilePath.split('/').last,
                             style: TextStyle(
-                              color: _outputDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _polygonFilePath.isEmpty ? Colors.grey : Colors.green,
+                              fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
-                          onPressed: _isProcessing ? null : _selectOutputDirectory,
-                          child: const Text('Browse'),
+                          onPressed: _selectPolygonFile,
+                          child: const Text('Select File'),
                         ),
                       ],
                     ),
@@ -294,7 +360,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
 
             const SizedBox(height: 16),
 
-            // DPI Setting
+            // Output File Input
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -302,103 +368,28 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'DPI Settings',
+                      'Output File',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 8),
-                    
-                    // DPI Value Display
-                    Text(
-                      '$_targetDpi DPI',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    
-                    // Slider - Modified for 50-600 range with 10-step increments
-                    Slider(
-                      value: _targetDpi.toDouble(),
-                      min: 50,
-                      max: 600,
-                      divisions: (600 - 50) ~/ 10, // 55 divisions for 10-step increments
-                      label: '$_targetDpi DPI',
-                      onChanged: _isProcessing ? null : (value) {
-                        setState(() {
-                          _targetDpi = value.round();
-                          _dpiController.text = _targetDpi.toString();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('50 DPI', style: TextStyle(fontSize: 12)),
-                        Text('300 DPI', style: TextStyle(fontSize: 12)),
-                        Text('600 DPI', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    // Manual Input
                     Row(
                       children: [
-                        const Text('Custom DPI:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 16),
                         Expanded(
-                          child: TextFormField(
-                            controller: _dpiController,
-                            keyboardType: TextInputType.number,
-                            enabled: !_isProcessing,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Text(
+                            _outputPath,
+                            style: const TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
                             ),
-                            onChanged: (value) {
-                              // Update in real-time as user types
-                              final parsed = int.tryParse(value);
-                              if (parsed != null && parsed >= 50 && parsed <= 600) {
-                                setState(() {
-                                  _targetDpi = parsed;
-                                });
-                              }
-                            },
-                            onEditingComplete: _updateDpiFromTextField,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: _selectOutputFile,
+                          child: const Text('Browse'),
+                        ),
                       ],
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    // Quick Select Buttons - Updated to include lower DPI values
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [50, 100, 150, 200, 300, 400, 600].map((dpi) {
-                        return FilterChip(
-                          label: Text('$dpi DPI'),
-                          selected: _targetDpi == dpi,
-                          onSelected: _isProcessing ? null : (bool selected) {
-                            if (selected) {
-                              setState(() {
-                                _targetDpi = dpi;
-                                _dpiController.text = dpi.toString();
-                              });
-                            }
-                          },
-                          backgroundColor: Colors.grey[200],
-                          selectedColor: Colors.purple[100],
-                          checkmarkColor: Colors.purple,
-                          labelStyle: TextStyle(
-                            color: _targetDpi == dpi ? Colors.purple : Colors.black,
-                          ),
-                        );
-                      }).toList(),
                     ),
                   ],
                 ),
@@ -409,9 +400,9 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
 
             // Run Button
             ElevatedButton.icon(
-              onPressed: _isProcessing ? null : _startDpiConversion,
-              icon: const Icon(Icons.photo_size_select_large),
-              label: const Text('Start DPI Conversion'),
+              onPressed: _isProcessing ? null : _startEvaluation,
+              icon: const Icon(Icons.analytics),
+              label: const Text('Start Evaluation'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.purple,
@@ -430,7 +421,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                   child: Column(
                     children: [
                       Text(
-                        _progress['message']?.toString() ?? 'Converting DPI...',
+                        _progress['message']?.toString() ?? 'Evaluating data...',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 16),
@@ -444,9 +435,11 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            (_progress['total'] as int? ?? 0) > 0 
-                                ? '${_progress['current'] as int? ?? 0} / ${_progress['total'] as int? ?? 0} images'
-                                : 'Starting...',
+                            'Processing...',
+                            style: TextStyle(
+                              color: Colors.purple[700],
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
@@ -461,10 +454,15 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
 
             const SizedBox(height: 20),
 
+            // Statistics Display
+            _buildStatisticsCard(),
+
+            const SizedBox(height: 20),
+
             // Instructions
-            Card(
-              color: Colors.purple[50],
-              child: const Padding(
+            const Card(
+              color: Color.fromARGB(255, 230, 210, 255),
+              child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,17 +472,22 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     SizedBox(height: 8),
-                    Text('• Select source folder containing images'),
-                    Text('• Select output folder for DPI-converted images'),
-                    Text('• Choose target DPI using any method:'),
-                    Text('  - Type directly in the text field'),
-                    Text('  - Use quick select buttons for common values'),
-                    Text('  - Use the slider for fine control'),
-                    Text('• Images will be resized to maintain physical dimensions'),
-                    Text('• Supports: JPG, JPEG, PNG, TIFF, BMP'),
+                    Text('• Select SiPW Excel file (export_sipw_*.xlsx)'),
+                    Text('• Select polygon file (GeoJSON, Shapefile, or GeoPackage)'),
+                    Text('• Choose output location for evaluation report'),
+                    Text('• Click "Start Evaluation" to begin analysis'),
                     SizedBox(height: 8),
                     Text(
-                      'Note: Higher DPI means larger file sizes but better print quality',
+                      'The evaluation will check for:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('• Duplicated sub-SLS IDs in polygon data'),
+                    Text('• Records that exist only in SiPW or only in polygon'),
+                    Text('• Name differences between SiPW and polygon'),
+                    Text('• Polygon records without geometry'),
+                    SizedBox(height: 8),
+                    Text(
+                      'Output will be an Excel file with multiple sheets containing detailed results.',
                       style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
                     ),
                   ],

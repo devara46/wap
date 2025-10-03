@@ -18,6 +18,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
   DateTime? _processStartTime;
   Timer? _processTimeoutTimer;
   List<String> _processedIDs = [];
+  bool _showSuccessDialog = false;
 
   final FileOrganizerService _organizerService = FileOrganizerService();
 
@@ -31,44 +32,72 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
   void dispose() {
     _progressSubscription?.cancel();
     _processTimeoutTimer?.cancel();
-    _organizerService.dispose();
+    // DON'T dispose the organizer service here - it's a singleton
+    // _organizerService.dispose();
     super.dispose();
   }
 
   void _setupProgressListener() {
     _progressSubscription = _organizerService.progressStream.listen((progress) {
+      if (!mounted) return;
+
       setState(() {
         _progress = progress;
         _isProcessing = progress['isProcessing'] ?? false;
       });
 
-      final errorMessage = progress['error']?.toString();
-      if (errorMessage != null && errorMessage.isNotEmpty && !_isProcessing) {
-        if (!errorMessage.contains('Cancelled by user')) {
-          _showError('Processing Error', errorMessage);
-        }
+      // Update processed IDs if available
+      if (progress.containsKey('processedDesaIDs')) {
+        setState(() {
+          _processedIDs = List<String>.from(progress['processedDesaIDs'] ?? []);
+        });
       }
 
-      if (!_isProcessing) {
+      final errorMessage = progress['error']?.toString();
+      
+      // Handle completion (when processing stops and no error)
+      if (!_isProcessing && errorMessage == null) {
         _processTimeoutTimer?.cancel();
         
         final current = progress['current'] as int? ?? 0;
         final total = progress['total'] as int? ?? 0;
         
-        if (current > 0 && errorMessage == null) {
-          // Store processed IDs for display
-          if (_progress.containsKey('processedDesaIDs')) {
-            _processedIDs = List<String>.from(_progress['processedDesaIDs'] ?? []);
-          }
-          
+        // Only show success if we actually processed files and haven't shown the dialog yet
+        if (current > 0 && total > 0 && !_showSuccessDialog) {
+          _showSuccessDialog = true;
           final uniqueCount = _progress['uniqueDesaCount'] as int? ?? 0;
-          _showSuccess('Success', 'File organization completed! $current files processed into $uniqueCount unique Desa folders');
+          final movedCount = _progress['movedFiles'] as int? ?? 0;
+          
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showSuccess(
+              'Success', 
+              'File organization completed!\n\n'
+              '• $movedCount files moved\n'
+              '• $uniqueCount unique Desa folders\n'
+              '• $current files processed in total'
+            );
+          });
+        }
+      }
+      
+      // Handle errors (only show if not already showing success)
+      if (errorMessage != null && errorMessage.isNotEmpty && !_isProcessing) {
+        if (!errorMessage.contains('Cancelled by user') && !_showSuccessDialog) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showError('Processing Error', errorMessage);
+          });
         }
       }
     }, onError: (error) {
-      _showError('Error', 'Failed to get progress updates: ${error.toString()}');
+      if (!mounted) return;
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showError('Error', 'Failed to get progress updates: ${error.toString()}');
+      });
+      
       setState(() => _isProcessing = false);
       _processTimeoutTimer?.cancel();
+      _showSuccessDialog = false;
     });
   }
 
@@ -80,7 +109,8 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     if (selectedDir != null) {
       setState(() {
         _sourceFolder = selectedDir;
-        _processedIDs.clear(); // Clear previous results
+        _processedIDs.clear();
+        _showSuccessDialog = false;
       });
     }
   }
@@ -96,10 +126,11 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
       _progress = {};
       _processedIDs.clear();
       _processStartTime = DateTime.now();
+      _showSuccessDialog = false;
     });
 
     _processTimeoutTimer = Timer(const Duration(minutes: 10), () {
-      if (_isProcessing) {
+      if (_isProcessing && mounted) {
         _organizerService.cancel();
         _showError('Timeout', 'File organization took too long and was cancelled');
         setState(() => _isProcessing = false);
@@ -112,20 +143,31 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
         recursive: true,
       );
 
-      if (result['success'] != true) {
-        _showError('Processing Failed', result['error']?.toString() ?? 'Unknown error occurred');
+      // The progress stream will handle the UI updates
+      // This just ensures we catch any immediate errors
+      if (result['success'] != true && mounted && !_showSuccessDialog) {
+        final error = result['error']?.toString() ?? 'Unknown error occurred';
+        if (!error.contains('Cancelled by user')) {
+          _showError('Processing Failed', error);
+        }
       }
       
     } catch (e) {
+      if (!mounted) return;
+      
       _processTimeoutTimer?.cancel();
       setState(() => _isProcessing = false);
+      _showSuccessDialog = false;
       _showError('Error', e.toString());
     }
   }
 
   void _cancelOrganization() {
     _organizerService.cancel();
-    setState(() => _isProcessing = false);
+    setState(() {
+      _isProcessing = false;
+      _showSuccessDialog = false;
+    });
     _processTimeoutTimer?.cancel();
     _showInfo('Cancelled', 'File organization has been cancelled');
   }
@@ -353,6 +395,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Organize Files by Numeric ID'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.orange,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -516,10 +559,6 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                     Text('• Files will be moved to: KecamatanID/DesaID/'),
                     Text('• Only files with numeric prefixes will be processed'),
                     SizedBox(height: 8),
-                    Text(
-                      'Note: This works entirely offline - no Python server required!',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-                    ),
                   ],
                 ),
               ),

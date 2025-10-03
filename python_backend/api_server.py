@@ -350,11 +350,9 @@ def run_dpi_conversion_background(source_dir, dest_dir, target_dpi):
         processing_status['is_processing'] = False
         print(f"Error in DPI conversion: {e}")
 
-# Update the create_world_files endpoint in api_server.py
-
 @app.route('/create_world_files', methods=['POST'])
 def create_world_files_endpoint():
-    """Create world files from geographic data (GeoJSON, GPKG, SHP)"""
+    """Create world files from geographic data with configurable DPI and dimensions"""
     global processing_status
     
     if processing_status['is_processing']:
@@ -365,18 +363,34 @@ def create_world_files_endpoint():
         geo_file_path = data.get('geojson_path')
         output_dir = data.get('output_dir')
         file_extension = data.get('file_extension', 'jgw')
-        expand_percentage = data.get('expand_percentage', 0.05)  # Default to 5%
+        expand_percentage = data.get('expand_percentage', 0.05)
+        target_dpi = data.get('target_dpi', 200)  # Default to 200 DPI
+        landscape_width = data.get('landscape_width', 3307)  # Default dimensions
+        landscape_height = data.get('landscape_height', 2338)
+        portrait_width = data.get('portrait_width', 2338)
+        portrait_height = data.get('portrait_height', 3307)
         
         if not geo_file_path or not output_dir:
             return jsonify({'error': 'Geographic file path and output directory required'}), 400
         
-        # Validate expand_percentage
+        # Validate parameters
         try:
             expand_percentage = float(expand_percentage)
+            target_dpi = int(target_dpi)
+            landscape_width = int(landscape_width)
+            landscape_height = int(landscape_height)
+            portrait_width = int(portrait_width)
+            portrait_height = int(portrait_height)
+            
             if expand_percentage < 0:
                 return jsonify({'error': 'Expand percentage must be non-negative'}), 400
-        except (ValueError, TypeError):
-            return jsonify({'error': 'Expand percentage must be a valid number'}), 400
+            if target_dpi <= 0:
+                return jsonify({'error': 'DPI must be positive'}), 400
+            if any(dim <= 0 for dim in [landscape_width, landscape_height, portrait_width, portrait_height]):
+                return jsonify({'error': 'All dimensions must be positive'}), 400
+                
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid parameter: {e}'}), 400
         
         # Reset processing status
         processing_status = {
@@ -390,7 +404,8 @@ def create_world_files_endpoint():
         # Start processing in background thread
         thread = threading.Thread(
             target=run_world_files_creation_background,
-            args=(geo_file_path, output_dir, file_extension, expand_percentage),
+            args=(geo_file_path, output_dir, file_extension, expand_percentage, target_dpi, 
+                  landscape_width, landscape_height, portrait_width, portrait_height),
             daemon=True
         )
         thread.start()
@@ -398,7 +413,12 @@ def create_world_files_endpoint():
         return jsonify({
             'message': 'World file creation started in background',
             'status': 'started',
-            'expand_percentage_used': expand_percentage
+            'expand_percentage_used': expand_percentage,
+            'dpi_used': target_dpi,
+            'dimensions_used': {
+                'landscape': f'{landscape_width}x{landscape_height}',
+                'portrait': f'{portrait_width}x{portrait_height}'
+            }
         })
         
     except Exception as e:
@@ -406,7 +426,8 @@ def create_world_files_endpoint():
         processing_status['is_processing'] = False
         return jsonify({'error': str(e)}), 500
 
-def run_world_files_creation_background(geojson_path, output_dir, file_extension, expand_percentage):
+def run_world_files_creation_background(geojson_path, output_dir, file_extension, expand_percentage, 
+                                       target_dpi, landscape_width, landscape_height, portrait_width, portrait_height):
     """Run world file creation in background with progress updates"""
     global processing_status
     
@@ -416,7 +437,12 @@ def run_world_files_creation_background(geojson_path, output_dir, file_extension
             geojson_path, 
             output_dir, 
             file_extension,
-            expand_percentage
+            expand_percentage,
+            target_dpi,
+            landscape_width,
+            landscape_height,
+            portrait_width,
+            portrait_height
         )
         
         if result['success']:
@@ -425,7 +451,8 @@ def run_world_files_creation_background(geojson_path, output_dir, file_extension
                 'current': result['total_files'],
                 'total': result['total_files'],
                 'is_processing': False,
-                'expand_percentage_used': expand_percentage
+                'expand_percentage_used': expand_percentage,
+                'dpi_used': target_dpi
             })
         else:
             processing_status.update({
@@ -436,6 +463,79 @@ def run_world_files_creation_background(geojson_path, output_dir, file_extension
     except Exception as e:
         processing_status.update({
             'error': f'Error in world file creation: {str(e)}',
+            'is_processing': False
+        })
+        
+@app.route('/evaluate_sipw', methods=['POST'])
+def evaluate_sipw_endpoint():
+    """Evaluate SiPW data against polygon data"""
+    global processing_status
+    
+    if processing_status['is_processing']:
+        return jsonify({'error': 'Another process is already running'}), 400
+    
+    try:
+        data = request.get_json()
+        sipw_path = data.get('sipw_path')
+        polygon_path = data.get('polygon_path')
+        output_path = data.get('output_path', 'Evaluation_Result.xlsx')
+        
+        if not sipw_path or not polygon_path:
+            return jsonify({'error': 'Both SiPW file and polygon file are required'}), 400
+        
+        # Reset processing status
+        processing_status = {
+            'is_processing': True,
+            'current': 0,
+            'total': 0,
+            'message': 'Starting SiPW evaluation...',
+            'error': None
+        }
+        
+        # Start processing in background thread
+        thread = threading.Thread(
+            target=run_sipw_evaluation_background,
+            args=(sipw_path, polygon_path, output_path),
+            daemon=True
+        )
+        thread.start()
+        
+        return jsonify({
+            'message': 'SiPW evaluation started in background',
+            'status': 'started'
+        })
+        
+    except Exception as e:
+        processing_status['error'] = str(e)
+        processing_status['is_processing'] = False
+        return jsonify({'error': str(e)}), 500
+
+def run_sipw_evaluation_background(sipw_path, polygon_path, output_path):
+    """Run SiPW evaluation in background with progress updates"""
+    global processing_status
+    
+    try:
+        # Process the evaluation
+        result = main_function.evaluate_sipw_polygon(sipw_path, polygon_path, output_path)
+        
+        if result['success']:
+            stats = result['statistics']
+            processing_status.update({
+                'message': result['message'],
+                'current': 1,
+                'total': 1,
+                'is_processing': False,
+                'statistics': stats
+            })
+        else:
+            processing_status.update({
+                'error': result['error'],
+                'is_processing': False
+            })
+            
+    except Exception as e:
+        processing_status.update({
+            'error': f'Error in SiPW evaluation: {str(e)}',
             'is_processing': False
         })
 

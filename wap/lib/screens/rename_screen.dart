@@ -176,6 +176,7 @@ class _RenameScreenState extends State<RenameScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Batch Rename Images'),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.blue,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -316,9 +317,9 @@ class _RenameScreenState extends State<RenameScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 210, 200, 255),
-              child: Padding(
+            Card(
+              color: Colors.blue[50],
+              child: const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

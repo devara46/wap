@@ -1,0 +1,24 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+*.log
+
+# === Flutter / Dart ===
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# === IDE / OS ===
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db

@@ -271,7 +271,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SiPW vs Polygon Evaluation'),
+        title: const Text('Wilkerstat Evaluation'),
         foregroundColor: Colors.white,
         backgroundColor: Colors.purple,
         leading: IconButton(

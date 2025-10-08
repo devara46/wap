@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,9 +21,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Python-Flutter App',
+      title: 'Wilkerstat Application Platform',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: AppTheme.primaryColor,
         useMaterial3: true,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 import 'rename_screen.dart';
 import 'rotate_screen.dart';
 import 'dpi_conversion_screen.dart';
@@ -78,9 +81,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Python-Flutter Integration'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.blue[700],
+        title: const Text('Wilkerstat Application Platform'),
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         // Removed the refresh button from app bar
       ),
       body: SingleChildScrollView(
@@ -89,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Server Status Card
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -98,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       children: [
                         Icon(
                           _isServerConnected ? Icons.check_circle : Icons.error,
-                          color: _isServerConnected ? Colors.green : Colors.red,
+                          color: _isServerConnected ? AppTheme.successColor : AppTheme.errorColor,
                           size: 24,
                         ),
                         const SizedBox(width: 10),
@@ -106,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           _isServerConnected ? 'Backend Connected' : 'Backend Offline',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: _isServerConnected ? Colors.green : Colors.red,
+                            color: _isServerConnected ? AppTheme.successColor : AppTheme.errorColor,
                           ),
                         ),
                       ],
@@ -124,8 +127,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         label: const Text('Check Connection'),
                         onPressed: _checkServerConnection,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.successColor,
+                          foregroundColor: AppTheme.textInverse,
                         ),
                       ),
                     ],
@@ -137,8 +140,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         label: const Text('Check Connection'),
                         onPressed: _checkServerConnection,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.errorColor,
+                          foregroundColor: AppTheme.textInverse,
                         ),
                       ),
                     ],
@@ -150,84 +153,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 30),
 
             // Navigation Cards
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline, color: Colors.blue),
+                leading: const Icon(Icons.drive_file_rename_outline, color: AppTheme.primaryColor),
                 title: const Text('Batch Rename Images'),
                 subtitle: const Text('Rename images based on QR codes'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RenameScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.rotate_right, color: Colors.orange),
+                leading: const Icon(Icons.rotate_right, color: AppTheme.primaryColor),
                 title: const Text('Batch Rotate Images'),
                 subtitle: const Text('Auto-rotate images based on QR position'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RotateScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.photo_size_select_large, color: Colors.purple),
+                leading: const Icon(Icons.photo_size_select_large, color: AppTheme.primaryColor),
                 title: const Text('DPI Conversion'),
                 subtitle: const Text('Convert image DPI for print quality'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DpiConversionScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.map, color: Colors.green),
+                leading: const Icon(Icons.map, color: AppTheme.primaryColor),
                 title: const Text('Create World Files'),
                 subtitle: const Text('Generate georeferencing world files from GeoJSON'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeorefScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.folder, color: Colors.orange),
+                leading: const Icon(Icons.folder, color: AppTheme.primaryColor),
                 title: const Text('Organize Files by ID'),
                 subtitle: const Text('Organize files into folders based on their IDs'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrganizeScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.map, color: Colors.green),
-                title: const Text('Geographic Analysis'),
+                leading: const Icon(Icons.map, color: AppTheme.primaryColor),
+                title: const Text('Off-point Analysis'),
                 subtitle: const Text('Check points outside polygons'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeoAnalysisScreen())),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Card(
+            CustomCard(
               child: ListTile(
-                leading: const Icon(Icons.analytics, color: Colors.purple),
+                leading: const Icon(Icons.analytics, color: AppTheme.primaryColor),
                 title: const Text('Wilkerstat Evaluation'),
                 subtitle: const Text('Compare SiPW data with polygon data'),
-                trailing: const Icon(Icons.arrow_forward),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EvaluationScreen())),
               ),
             ),
@@ -235,16 +238,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 30),
 
             // Instructions
-            Card(
-              color: Colors.blue[50],
-              child: const Padding(
+            const InstructionCard(
+              child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions'
                     ),
                     SizedBox(height: 8),
                     Text('1. Ensure server is running on http://localhost:5000'),

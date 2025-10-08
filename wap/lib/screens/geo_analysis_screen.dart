@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 
 class GeoAnalysisScreen extends StatefulWidget {
   const GeoAnalysisScreen({super.key});
@@ -93,7 +96,7 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.green)),
+        title: Text(title, style: const TextStyle(color: AppTheme.successColor)),
         content: Text(message),
         actions: [
           TextButton(
@@ -109,9 +112,9 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Geographic Analysis'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.green,
+        title: const Text('Off-point Analysis'),
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -123,15 +126,15 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Point File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Point File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Point File',
+                      subtitle: 'Please select your point files (e.g., Wilkerstat tagging file)',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -140,7 +143,7 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
                           child: Text(
                             _pointFile.isEmpty ? 'No file selected' : _pointFile,
                             style: TextStyle(
-                              color: _pointFile.isEmpty ? Colors.grey : Colors.black,
+                              color: _pointFile.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -160,15 +163,15 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
             const SizedBox(height: 16),
 
             // Polygon File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Polygon File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Polygon File',
+                      subtitle: 'Please select your polygon file',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -177,7 +180,7 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
                           child: Text(
                             _polygonFile.isEmpty ? 'No file selected' : _polygonFile,
                             style: TextStyle(
-                              color: _polygonFile.isEmpty ? Colors.grey : Colors.black,
+                              color: _polygonFile.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -197,15 +200,15 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
             const SizedBox(height: 16),
 
             // Level Selection
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Analysis Level',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Analysis Level',
+                      subtitle: 'Please select the level at which you want to run the analysis',
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
@@ -234,24 +237,22 @@ class _GeoAnalysisScreenState extends State<GeoAnalysisScreen> {
               label: const Text('Start Analysis'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: AppTheme.backgroundColor,
               ),
             ),
 
             const SizedBox(height: 20),
 
             // Instructions
-            Card(
-              color: Colors.green[50],
-              child: const Padding(
+            const InstructionCard(
+              child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions:',
                     ),
                     SizedBox(height: 8),
                     Text('• Select point file (SHP, GeoJSON, or KML)'),

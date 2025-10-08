@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/file_organizer_service.dart';
+import 'package:wap/services/file_organizer_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
 
 class OrganizeScreen extends StatefulWidget {
   const OrganizeScreen({super.key});
@@ -241,7 +244,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.blue)),
+        title: Text(title, style: const TextStyle(color: AppTheme.primaryColor)),
         content: Text(message),
         actions: [
           TextButton(
@@ -262,16 +265,15 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
   }
 
   Widget _buildFolderStructure() {
-    return Card(
-      color: Colors.blue[50],
+    return CustomCard(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Folder Structure:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SectionHeader(
+              title: 'Folder Structure:',
+              subtitle: 'Resulting structure example',
             ),
             const SizedBox(height: 8),
             Text.rich(
@@ -283,19 +285,19 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                   ),
                   TextSpan(
                     text: '    ├── 1234567/          (Kecamatan)\n',
-                    style: TextStyle(color: Colors.blue[700]),
+                    style: TextStyle(color: AppTheme.primaryColor.shade700),
                   ),
                   TextSpan(
                     text: '    │   └── 1234567890/  (Desa)\n',
-                    style: TextStyle(color: Colors.blue[700]),
+                    style: TextStyle(color: AppTheme.primaryColor.shade700),
                   ),
-                  TextSpan(
+                  const TextSpan(
                     text: '    │       └── 1234567890_WS.jpg\n',
-                    style: TextStyle(color: Colors.green[700]),
+                    style: TextStyle(color: AppTheme.successColor),
                   ),
                   TextSpan(
                     text: '    └── ...',
-                    style: TextStyle(color: Colors.blue[700]),
+                    style: TextStyle(color: AppTheme.primaryColor.shade700),
                   ),
                 ],
               ),
@@ -308,16 +310,15 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
   }
 
   Widget _buildFilenameExamples() {
-    return Card(
-      color: Colors.green[50],
-      child: const Padding(
+    return const CustomCard(
+      child: Padding(
         padding: EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Filename Requirements:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            SectionHeader(
+              title: 'Filename Requirements:',
+              subtitle: 'Required filename to work',
             ),
             SizedBox(height: 8),
             Text('• First 10 characters must be numeric'),
@@ -350,7 +351,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     if (_processedIDs.isEmpty || _isProcessing) return const SizedBox();
 
     return Card(
-      color: Colors.orange[50],
+      color: AppTheme.primaryColor.shade50,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -374,7 +375,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                 runSpacing: 4,
                 children: _processedIDs.take(15).map((id) => Chip(
                   label: Text(id),
-                  backgroundColor: Colors.orange[100],
+                  backgroundColor: AppTheme.primaryColor.shade100,
                   labelStyle: const TextStyle(fontSize: 10),
                 )).toList(),
               ),
@@ -395,8 +396,8 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Organize Files by Numeric ID'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.orange,
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _isProcessing ? null : () => Navigator.pop(context),
@@ -416,15 +417,15 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Source Folder Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Source Folder',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Source Folder',
+                      subtitle: 'Select your source directory',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -433,7 +434,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                           child: Text(
                             _sourceFolder.isEmpty ? 'No folder selected' : _sourceFolder,
                             style: TextStyle(
-                              color: _sourceFolder.isEmpty ? Colors.grey : Colors.black,
+                              color: _sourceFolder.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -475,8 +476,8 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                 label: const Text('Organize Files'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: AppTheme.backgroundColor,
                 ),
               )
             else
@@ -489,8 +490,8 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                       label: const Text('Cancel'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppTheme.errorColor,
+                        foregroundColor: AppTheme.backgroundColor,
                       ),
                     ),
                   ),
@@ -502,7 +503,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
             // Progress display
             if (_isProcessing)
               Card(
-                color: Colors.orange[50],
+                color: AppTheme.primaryColor.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -528,7 +529,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -540,16 +541,14 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 255, 235, 210),
+            const InstructionCard(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions:',
                     ),
                     SizedBox(height: 8),
                     Text('• Select folder containing files to organize'),

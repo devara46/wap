@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 
 class EvaluationScreen extends StatefulWidget {
   const EvaluationScreen({super.key});
@@ -177,7 +180,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.green)),
+        title: Text(title, style: const TextStyle(color: AppTheme.successColor)),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,7 +227,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     if (_statistics == null) return const SizedBox();
 
     return Card(
-      color: Colors.blue[50],
+      color: AppTheme.primaryColor.shade50,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -259,7 +262,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             value,
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: isWarning && int.parse(value) > 0 ? Colors.red : Colors.green,
+              color: isWarning && int.parse(value) > 0 ? AppTheme.errorColor : AppTheme.successColor,
             ),
           ),
         ],
@@ -272,8 +275,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wilkerstat Evaluation'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.purple,
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -285,15 +288,15 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // SiPW File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'SiPW Excel File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'SiPW Excel File',
+                      subtitle: 'Please select your SiPW export file',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -302,7 +305,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                           child: Text(
                             _sipwFilePath.isEmpty ? 'No file selected' : _sipwFilePath.split('/').last,
                             style: TextStyle(
-                              color: _sipwFilePath.isEmpty ? Colors.grey : Colors.blue,
+                              color: _sipwFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -323,15 +326,15 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             const SizedBox(height: 16),
 
             // Polygon File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Polygon File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Polygon File',
+                      subtitle: 'Please select you polygon file',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -340,7 +343,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                           child: Text(
                             _polygonFilePath.isEmpty ? 'No file selected' : _polygonFilePath.split('/').last,
                             style: TextStyle(
-                              color: _polygonFilePath.isEmpty ? Colors.grey : Colors.green,
+                              color: _polygonFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.primaryColor,
                               fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -361,15 +364,15 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             const SizedBox(height: 16),
 
             // Output File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Output File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Output File',
+                      subtitle: 'Select your output destination',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -378,7 +381,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                           child: Text(
                             _outputPath,
                             style: const TextStyle(
-                              color: Colors.orange,
+                              color: AppTheme.textSelected,
                               fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -405,8 +408,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
               label: const Text('Start Evaluation'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: AppTheme.backgroundColor,
               ),
             ),
 
@@ -415,7 +418,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             // Progress display
             if (_isProcessing)
               Card(
-                color: Colors.purple[50],
+                color: AppTheme.primaryColor.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -437,13 +440,13 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                           Text(
                             'Processing...',
                             style: TextStyle(
-                              color: Colors.purple[700],
+                              color: AppTheme.primaryColor.shade700,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -460,16 +463,14 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 230, 210, 255),
+            const InstructionCard(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions:',
                     ),
                     SizedBox(height: 8),
                     Text('• Select SiPW Excel file (export_sipw_*.xlsx)'),

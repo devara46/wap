@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 
 class RenameScreen extends StatefulWidget {
   const RenameScreen({super.key});
@@ -151,7 +154,7 @@ class _RenameScreenState extends State<RenameScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.green)),
+        title: Text(title, style: const TextStyle(color: AppTheme.successColor)),
         content: Text(message),
         actions: [
           TextButton(
@@ -176,8 +179,8 @@ class _RenameScreenState extends State<RenameScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Batch Rename Images'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.blue,
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -189,15 +192,15 @@ class _RenameScreenState extends State<RenameScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Source Directory Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Source Directory',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Source Directory',
+                      subtitle: 'Select your source directory',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -206,7 +209,7 @@ class _RenameScreenState extends State<RenameScreen> {
                           child: Text(
                             _sourceDir.isEmpty ? 'No directory selected' : _sourceDir,
                             style: TextStyle(
-                              color: _sourceDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _sourceDir.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -226,15 +229,15 @@ class _RenameScreenState extends State<RenameScreen> {
             const SizedBox(height: 16),
 
             // Output Directory Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Output Directory',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Output Directory',
+                      subtitle: 'Select your destination directory', 
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -243,7 +246,7 @@ class _RenameScreenState extends State<RenameScreen> {
                           child: Text(
                             _outputDir.isEmpty ? 'No directory selected' : _outputDir,
                             style: TextStyle(
-                              color: _outputDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _outputDir.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -269,8 +272,8 @@ class _RenameScreenState extends State<RenameScreen> {
               label: const Text('Start Renaming'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: AppTheme.backgroundColor,
               ),
             ),
 
@@ -279,7 +282,7 @@ class _RenameScreenState extends State<RenameScreen> {
             // Progress display
             if (_isProcessing)
               Card(
-                color: Colors.blue[50],
+                color: AppTheme.primaryColor.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -305,7 +308,7 @@ class _RenameScreenState extends State<RenameScreen> {
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -317,17 +320,13 @@ class _RenameScreenState extends State<RenameScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            Card(
-              color: Colors.blue[50],
-              child: const Padding(
+            const InstructionCard(
+              child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
+                    SectionHeader(title: 'Instructions:'),
                     SizedBox(height: 8),
                     Text('• Select source folder containing images with QR codes'),
                     Text('• Select output folder for renamed images'),

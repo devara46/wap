@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 
 class GeorefScreen extends StatefulWidget {
   const GeorefScreen({super.key});
@@ -225,7 +228,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.green)),
+        title: Text(title, style: const TextStyle(color: AppTheme.successColor)),
         content: SingleChildScrollView(
           child: Text(message),
         ),
@@ -248,15 +251,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
   }
 
   Widget _buildExpandPercentageSlider() {
-    return Card(
+    return CustomCard(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Expand Percentage',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SectionHeader(
+              title: 'Expand Percentage',
+              subtitle: 'Adjust the expand percentage based on your layout',
             ),
             const SizedBox(height: 8),
             Text(
@@ -264,7 +267,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.green,
+                color: AppTheme.primaryColor,
               ),
             ),
             const SizedBox(height: 8),
@@ -292,7 +295,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
             const SizedBox(height: 8),
             Text(
               'Expands the bounds of each polygon by ${_expandPercentage.toStringAsFixed(1)}% to ensure proper coverage.',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -323,11 +326,11 @@ class _GeorefScreenState extends State<GeorefScreen> {
               });
             }
           },
-          backgroundColor: Colors.grey[200],
-          selectedColor: Colors.green[100],
-          checkmarkColor: Colors.green,
+          backgroundColor: AppTheme.backgroundColorInactive.shade100,
+          selectedColor: AppTheme.primaryColor.shade100,
+          checkmarkColor: AppTheme.primaryColor,
           labelStyle: TextStyle(
-            color: _expandPercentage == preset['value'] ? Colors.green : Colors.black,
+            color: _expandPercentage == preset['value'] ? AppTheme.primaryColor : AppTheme.textPrimary,
           ),
         );
       }).toList(),
@@ -335,15 +338,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
   }
 
   Widget _buildDpiSettings() {
-    return Card(
+    return CustomCard(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'DPI Settings',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SectionHeader(
+              title: 'DPI Settings',
+              subtitle: 'Adjust the target DPI for conversion',
             ),
             const SizedBox(height: 8),
             
@@ -353,7 +356,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.green,
+                color: AppTheme.primaryColor,
               ),
             ),
             const SizedBox(height: 8),
@@ -424,11 +427,11 @@ class _GeorefScreenState extends State<GeorefScreen> {
                       });
                     }
                   },
-                  backgroundColor: Colors.grey[200],
-                  selectedColor: Colors.green[100],
-                  checkmarkColor: Colors.green,
+                  backgroundColor: AppTheme.backgroundColorInactive.shade100,
+                  selectedColor: AppTheme.primaryColor.shade100,
+                  checkmarkColor: AppTheme.primaryColor,
                   labelStyle: TextStyle(
-                    color: _targetDpi == dpi ? Colors.green : Colors.black,
+                    color: _targetDpi == dpi ? AppTheme.primaryColor : AppTheme.textPrimary,
                   ),
                 );
               }).toList(),
@@ -440,15 +443,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
   }
 
   Widget _buildDimensionSettings() {
-    return Card(
+    return CustomCard(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Image Dimensions (pixels)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SectionHeader(
+              title: 'Image Dimensions (pixels)',
+              subtitle: 'Adjust to your image dimensions',
             ),
             const SizedBox(height: 8),
             
@@ -546,8 +549,8 @@ class _GeorefScreenState extends State<GeorefScreen> {
             
             const SizedBox(height: 8),
             Text(
-              'Current settings: Landscape ${_landscapeWidth}×$_landscapeHeight, Portrait $_portraitWidth×$_portraitHeight',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              'Current settings: Landscape $_landscapeWidth×$_landscapeHeight, Portrait $_portraitWidth×$_portraitHeight',
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -556,17 +559,17 @@ class _GeorefScreenState extends State<GeorefScreen> {
   }
 
   Widget _buildAdvancedToggle() {
-    return Card(
+    return CustomCard(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            const Icon(Icons.settings, color: Colors.green),
+            const Icon(Icons.settings, color: AppTheme.primaryColor),
             const SizedBox(width: 12),
             const Expanded(
-              child: Text(
-                'Advanced Settings',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              child: SectionHeader(
+                title: 'Advanced Settings',
+                subtitle: 'Turn on to use custom settings',
               ),
             ),
             Switch(
@@ -576,7 +579,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                   _showAdvanced = value;
                 });
               },
-              activeColor: Colors.green,
+              activeColor: AppTheme.primaryColor,
             ),
           ],
         ),
@@ -589,8 +592,8 @@ class _GeorefScreenState extends State<GeorefScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create World Files'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.green,
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -602,15 +605,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Geographic File Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Geographic Data File',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Geographic Data File',
+                      subtitle: 'Select your source directory',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -630,7 +633,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                                     _getFileTypeText(),
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: _geoFilePath.isEmpty ? Colors.grey : Colors.blue,
+                                      color: _geoFilePath.isEmpty ? AppTheme.backgroundColorInactive : AppTheme.primaryColor,
                                     ),
                                   ),
                                 ],
@@ -639,7 +642,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                               Text(
                                 _geoFilePath.isEmpty ? 'No file selected' : _geoFilePath,
                                 style: TextStyle(
-                                  color: _geoFilePath.isEmpty ? Colors.grey : Colors.black54,
+                                  color: _geoFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                                   fontSize: 12,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -663,15 +666,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
             const SizedBox(height: 16),
 
             // Output Directory Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Output Directory',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Output Directory',
+                      subtitle: 'Select your destination directory',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -680,7 +683,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                           child: Text(
                             _outputDir.isEmpty ? 'No directory selected' : _outputDir,
                             style: TextStyle(
-                              color: _outputDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _outputDir.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -730,15 +733,15 @@ class _GeorefScreenState extends State<GeorefScreen> {
               const SizedBox(height: 16),
 
               // File Extension Selection
-              Card(
+              CustomCard(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'World File Extension',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      const SectionHeader(
+                        title: 'World File Extension',
+                        subtitle: 'Select in accordance to your image extension',
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
@@ -774,8 +777,8 @@ class _GeorefScreenState extends State<GeorefScreen> {
               label: const Text('Create World Files'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: AppTheme.backgroundColor,
               ),
             ),
 
@@ -784,7 +787,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
             // Progress display
             if (_isProcessing)
               Card(
-                color: Colors.green[50],
+                color: AppTheme.primaryColor.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -810,7 +813,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -819,7 +822,7 @@ class _GeorefScreenState extends State<GeorefScreen> {
                           padding: const EdgeInsets.only(top: 8.0),
                           child: Text(
                             'Using ${_expandPercentage.toStringAsFixed(1)}% expansion and $_targetDpi DPI',
-                            style: const TextStyle(fontSize: 12, color: Colors.green),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSelected),
                           ),
                         ),
                     ],
@@ -830,16 +833,14 @@ class _GeorefScreenState extends State<GeorefScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            const Card(
-              color: Color.fromARGB(255, 210, 255, 210),
+            const InstructionCard(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions:',
                     ),
                     SizedBox(height: 8),
                     Text('• Select a geographic data file (GeoJSON, GPKG, or SHP)'),

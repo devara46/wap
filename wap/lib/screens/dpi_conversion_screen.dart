@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/python_service.dart';
+import 'package:wap/theme/app_theme.dart';
+import 'package:wap/widgets/custom_card.dart';
+import 'package:wap/widgets/section_header.dart';
+import 'package:wap/services/python_service.dart';
 
 class DpiConversionScreen extends StatefulWidget {
   const DpiConversionScreen({super.key});
@@ -183,7 +186,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(color: Colors.green)),
+        title: Text(title, style: const TextStyle(color: AppTheme.textSelected)),
         content: Text(message),
         actions: [
           TextButton(
@@ -208,8 +211,8 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('DPI Conversion'),
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.purple,
+        foregroundColor: AppTheme.backgroundColor,
+        backgroundColor: AppTheme.primaryColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -221,15 +224,15 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Source Directory Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Source Directory',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Source Directory',
+                      subtitle: 'Select your source directory'
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -238,7 +241,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                           child: Text(
                             _sourceDir.isEmpty ? 'No directory selected' : _sourceDir,
                             style: TextStyle(
-                              color: _sourceDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _sourceDir.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -257,16 +260,15 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
 
             const SizedBox(height: 16),
 
-            // Output Directory Input
-            Card(
+            CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Output Directory',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const SectionHeader(
+                      title: 'Output Directory',
+                      subtitle: 'Select your destination directory'
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -275,7 +277,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                           child: Text(
                             _outputDir.isEmpty ? 'No directory selected' : _outputDir,
                             style: TextStyle(
-                              color: _outputDir.isEmpty ? Colors.grey : Colors.black,
+                              color: _outputDir.isEmpty ? AppTheme.textSecondary : AppTheme.primaryColor,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -289,120 +291,110 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                     ),
                   ],
                 ),
-              ),
+              )
             ),
 
             const SizedBox(height: 16),
 
-            // DPI Setting
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'DPI Settings',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    
-                    // DPI Value Display
-                    Text(
-                      '$_targetDpi DPI',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    
-                    // Slider - Modified for 50-600 range with 10-step increments
-                    Slider(
-                      value: _targetDpi.toDouble(),
-                      min: 50,
-                      max: 600,
-                      divisions: (600 - 50) ~/ 10, // 55 divisions for 10-step increments
-                      label: '$_targetDpi DPI',
-                      onChanged: _isProcessing ? null : (value) {
-                        setState(() {
-                          _targetDpi = value.round();
-                          _dpiController.text = _targetDpi.toString();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('50 DPI', style: TextStyle(fontSize: 12)),
-                        Text('300 DPI', style: TextStyle(fontSize: 12)),
-                        Text('600 DPI', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    // Manual Input
-                    Row(
-                      children: [
-                        const Text('Custom DPI:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _dpiController,
-                            keyboardType: TextInputType.number,
-                            enabled: !_isProcessing,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            onChanged: (value) {
-                              // Update in real-time as user types
-                              final parsed = int.tryParse(value);
-                              if (parsed != null && parsed >= 50 && parsed <= 600) {
-                                setState(() {
+            CustomCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(
+                    title: 'DPI Settings',
+                    subtitle: 'Adjust the target DPI for conversion',
+                  ),
+
+                  Text(
+                    '$_targetDpi DPI',
+                    style: AppTheme.heading3.copyWith(color: AppTheme.textSelected),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Slider(
+                    value: _targetDpi.toDouble(),
+                    min: 50,
+                    max: 600,
+                    divisions: (600 - 50) ~/ 10,
+                    label: '$_targetDpi DPI',
+                    onChanged: _isProcessing ? null : (value) {
+                      setState(() {
+                        _targetDpi = value.round();
+                        _dpiController.text = _targetDpi.toString();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('50 DPI', style: AppTheme.bodySmall,),
+                      Text('300 DPI', style: AppTheme.bodySmall,),
+                      Text('600 DPI', style: AppTheme.bodySmall,),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Row(
+                    children: [
+                      const Text('Custom DPI', style: AppTheme.bodyMedium),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _dpiController,
+                          keyboardType: TextInputType.number,
+                          enabled: !_isProcessing,
+                          decoration: AppTheme.textInputDecoration,
+                          onChanged: (value) {
+                            final parsed = int.tryParse(value);
+                            if (parsed != null && parsed >= 50 && parsed <= 600) {
+                              setState(() {
+                                (() {
                                   _targetDpi = parsed;
                                 });
-                              }
-                            },
-                            onEditingComplete: _updateDpiFromTextField,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    // Quick Select Buttons - Updated to include lower DPI values
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [50, 100, 150, 200, 300, 400, 600].map((dpi) {
-                        return FilterChip(
-                          label: Text('$dpi DPI'),
-                          selected: _targetDpi == dpi,
-                          onSelected: _isProcessing ? null : (bool selected) {
-                            if (selected) {
-                              setState(() {
-                                _targetDpi = dpi;
-                                _dpiController.text = dpi.toString();
                               });
                             }
                           },
-                          backgroundColor: Colors.grey[200],
-                          selectedColor: Colors.purple[100],
-                          checkmarkColor: Colors.purple,
-                          labelStyle: TextStyle(
-                            color: _targetDpi == dpi ? Colors.purple : Colors.black,
+                        ),
+                      )
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [50, 100, 150, 200, 300, 400, 600].map((dpi) {
+                      final isSelected = _targetDpi == dpi;
+                      return ChoiceChip(
+                        label: Text(
+                          '$dpi DPI', 
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimary,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
+                        ),
+                        selected: isSelected,
+                        onSelected: _isProcessing ? null : (bool selected) {
+                          if (selected) {
+                            setState(() {
+                              _targetDpi = dpi;
+                              _dpiController.text = dpi.toString();
+                            });
+                          }
+                        },
+                        backgroundColor: AppTheme.backgroundColorInactive.shade100,
+                        selectedColor: AppTheme.primaryColor.shade100, // Solid color
+                        checkmarkColor: AppTheme.primaryColor,
+                        elevation: isSelected ? 2 : 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              )
             ),
 
             const SizedBox(height: 24),
@@ -414,8 +406,8 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
               label: const Text('Start DPI Conversion'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: AppTheme.backgroundColor,
               ),
             ),
 
@@ -424,7 +416,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
             // Progress display
             if (_isProcessing)
               Card(
-                color: Colors.purple[50],
+                color: AppTheme.primaryColor.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -450,7 +442,7 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
                           ),
                           Text(
                             'Elapsed: ${_getElapsedTime()}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -462,16 +454,14 @@ class _DpiConversionScreenState extends State<DpiConversionScreen> {
             const SizedBox(height: 20),
 
             // Instructions
-            Card(
-              color: Colors.purple[50],
-              child: const Padding(
+            const InstructionCard(
+              child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Instructions:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    SectionHeader(
+                      title: 'Instructions:',
                     ),
                     SizedBox(height: 8),
                     Text('• Select source folder containing images'),

@@ -468,7 +468,7 @@ def run_world_files_creation_background(geojson_path, output_dir, file_extension
         
 @app.route('/evaluate_sipw', methods=['POST'])
 def evaluate_sipw_endpoint():
-    """Evaluate SiPW data against polygon data"""
+    """Evaluate SiPW data against polygon data with optional overlap analysis"""
     global processing_status
     
     if processing_status['is_processing']:
@@ -477,25 +477,27 @@ def evaluate_sipw_endpoint():
     try:
         data = request.get_json()
         sipw_path = data.get('sipw_path')
-        polygon_path = data.get('polygon_path')
+        polygon_path = data.get('polygon_path')  # This should be current polygon
         output_path = data.get('output_path', 'Evaluation_Result.xlsx')
+        compare_polygon_path = data.get('compare_polygon_path')  # This is original polygon
+        overlap_threshold = data.get('overlap_threshold', 0.5)
         
         if not sipw_path or not polygon_path:
-            return jsonify({'error': 'Both SiPW file and polygon file are required'}), 400
+            return jsonify({'error': 'Both SiPW file and current polygon file are required'}), 400
         
         # Reset processing status
-        processing_status = {
+        processing_status.update({
             'is_processing': True,
             'current': 0,
             'total': 0,
             'message': 'Starting SiPW evaluation...',
             'error': None
-        }
+        })
         
         # Start processing in background thread
         thread = threading.Thread(
             target=run_sipw_evaluation_background,
-            args=(sipw_path, polygon_path, output_path),
+            args=(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold),
             daemon=True
         )
         thread.start()
@@ -506,24 +508,39 @@ def evaluate_sipw_endpoint():
         })
         
     except Exception as e:
-        processing_status['error'] = str(e)
-        processing_status['is_processing'] = False
+        processing_status.update({
+            'error': str(e),
+            'is_processing': False
+        })
         return jsonify({'error': str(e)}), 500
 
-def run_sipw_evaluation_background(sipw_path, polygon_path, output_path):
+def run_sipw_evaluation_background(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold):
     """Run SiPW evaluation in background with progress updates"""
     global processing_status
     
     try:
+        # Update progress
+        processing_status.update({
+            'message': 'Reading SiPW data...',
+            'current': 1,
+            'total': 6
+        })
+        
         # Process the evaluation
-        result = main_function.evaluate_sipw_polygon(sipw_path, polygon_path, output_path)
+        result = main_function.evaluate_sipw_polygon(
+            sipw_path, 
+            polygon_path,  # This is current polygon
+            output_path, 
+            compare_polygon_path,  # This is original polygon (optional)
+            overlap_threshold
+        )
         
         if result['success']:
-            stats = result['statistics']
+            stats = result.get('statistics', {})
             processing_status.update({
                 'message': result['message'],
-                'current': 1,
-                'total': 1,
+                'current': 6,
+                'total': 6,
                 'is_processing': False,
                 'statistics': stats
             })

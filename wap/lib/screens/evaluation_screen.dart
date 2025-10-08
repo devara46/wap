@@ -15,9 +15,12 @@ class EvaluationScreen extends StatefulWidget {
 
 class _EvaluationScreenState extends State<EvaluationScreen> {
   String _sipwFilePath = '';
-  String _polygonFilePath = '';
+  String _currentPolygonFilePath = '';
+  String _originalPolygonFilePath = '';
   String _outputPath = 'Evaluation_Result.xlsx';
+  double _overlapThreshold = 0.5;
   bool _isProcessing = false;
+  bool _includeOriginalPolygon = false;
   StreamSubscription? _progressSubscription;
   Map<String, dynamic> _progress = {};
   DateTime? _processStartTime;
@@ -48,16 +51,30 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     }
   }
 
-  Future<void> _selectPolygonFile() async {
+  Future<void> _selectCurrentPolygonFile() async {
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: _supportedPolygonFormats,
-      dialogTitle: 'Select Polygon File',
+      dialogTitle: 'Select Current Polygon File',
     );
     
     if (result != null && result.files.single.path != null) {
       setState(() {
-        _polygonFilePath = result.files.single.path!;
+        _currentPolygonFilePath = result.files.single.path!;
+      });
+    }
+  }
+
+  Future<void> _selectOriginalPolygonFile() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _supportedPolygonFormats,
+      dialogTitle: 'Select Original Polygon File',
+    );
+    
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _originalPolygonFilePath = result.files.single.path!;
       });
     }
   }
@@ -115,8 +132,13 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   }
 
   Future<void> _startEvaluation() async {
-    if (_sipwFilePath.isEmpty || _polygonFilePath.isEmpty) {
-      _showError('Error', 'Please select both SiPW file and polygon file');
+    if (_sipwFilePath.isEmpty || _currentPolygonFilePath.isEmpty) {
+      _showError('Error', 'Please select both SiPW file and current polygon file');
+      return;
+    }
+
+    if (_includeOriginalPolygon && _originalPolygonFilePath.isEmpty) {
+      _showError('Error', 'Please select original polygon file or disable the option');
       return;
     }
 
@@ -138,8 +160,10 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     try {
       final startResult = await PythonService.evaluateSipw(
         sipwPath: _sipwFilePath,
-        polygonPath: _polygonFilePath,
+        polygonPath: _currentPolygonFilePath,
         outputPath: _outputPath,
+        comparePolygonPath: _includeOriginalPolygon ? _originalPolygonFilePath : null,
+        overlapThreshold: _overlapThreshold,
       );
 
       if (startResult.containsKey('error')) {
@@ -201,6 +225,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                 Text('• Polygon Only Records: ${_statistics!['polygon_only']}'),
                 Text('• Name Differences: ${_statistics!['name_differences']}'),
                 Text('• Records Without Geometry: ${_statistics!['no_geometry']}'),
+                if (_statistics!.containsKey('overlapping_polygons'))
+                  Text('• Overlapping Polygons: ${_statistics!['overlapping_polygons']}'),
               ],
             ],
           ),
@@ -223,6 +249,142 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     return minutes > 0 ? '${minutes}m ${seconds}s' : '${seconds}s';
   }
 
+  Widget _buildOriginalPolygonToggle() {
+    return CustomCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            const Icon(Icons.compare_arrows, color: AppTheme.primaryColor),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Include Original Polygon',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  Text(
+                    'Compare with original polygon for overlap analysis',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _includeOriginalPolygon,
+              onChanged: _isProcessing ? null : (bool value) {
+                setState(() {
+                  _includeOriginalPolygon = value;
+                });
+              },
+              activeColor: AppTheme.primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOriginalPolygonInput() {
+    if (!_includeOriginalPolygon) return const SizedBox();
+
+    return CustomCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(
+              title: 'Original Polygon File',
+              subtitle: 'Select original polygon for comparison',
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _originalPolygonFilePath.isEmpty ? 'No file selected' : _originalPolygonFilePath.split('/').last,
+                    style: TextStyle(
+                      color: _originalPolygonFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _selectOriginalPolygonFile,
+                  child: const Text('Select File'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverlapSettings() {
+    if (!_includeOriginalPolygon) return const SizedBox();
+
+    return CustomCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(
+              title: 'Overlap Analysis Settings',
+              subtitle: 'Configure overlap detection sensitivity',
+            ),
+            const SizedBox(height: 16),
+            
+            // Overlap Threshold Slider
+            Text(
+              'Overlap Threshold: ${(_overlapThreshold * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: _overlapThreshold,
+              min: 0.1,
+              max: 1.0,
+              divisions: 9,
+              label: '${(_overlapThreshold * 100).toStringAsFixed(0)}%',
+              onChanged: _isProcessing ? null : (double value) {
+                setState(() {
+                  _overlapThreshold = value;
+                });
+              },
+              activeColor: AppTheme.primaryColor,
+              inactiveColor: AppTheme.primaryColor.shade100,
+            ),
+            const SizedBox(height: 8),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('10%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                Text('50%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                Text('100%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Minimum overlap ratio to consider as significant overlap between current and original polygons.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatisticsCard() {
     if (_statistics == null) return const SizedBox();
 
@@ -233,9 +395,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Evaluation Summary',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SectionHeader(
+              title: 'Evaluation Summary',
             ),
             const SizedBox(height: 12),
             _buildStatItem('Total SiPW Records', _statistics!['total_sipw'].toString()),
@@ -245,6 +406,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             _buildStatItem('Polygon Only Records', _statistics!['polygon_only'].toString(), isWarning: true),
             _buildStatItem('Name Differences', _statistics!['name_differences'].toString(), isWarning: true),
             _buildStatItem('No Geometry Records', _statistics!['no_geometry'].toString(), isWarning: true),
+            if (_statistics!.containsKey('overlapping_polygons'))
+              _buildStatItem('Overlapping Polygons', _statistics!['overlapping_polygons'].toString(), isWarning: true),
           ],
         ),
       ),
@@ -257,7 +420,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Text(label, style: const TextStyle(color: AppTheme.textPrimary)),
           Text(
             value,
             style: TextStyle(
@@ -325,7 +488,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
 
             const SizedBox(height: 16),
 
-            // Polygon File Input
+            // Current Polygon File Input
             CustomCard(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -334,16 +497,16 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                   children: [
                     const SectionHeader(
                       title: 'Polygon File',
-                      subtitle: 'Please select you polygon file',
+                      subtitle: 'Please select your polygon file',
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            _polygonFilePath.isEmpty ? 'No file selected' : _polygonFilePath.split('/').last,
+                            _currentPolygonFilePath.isEmpty ? 'No file selected' : _currentPolygonFilePath.split('/').last,
                             style: TextStyle(
-                              color: _polygonFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.primaryColor,
+                              color: _currentPolygonFilePath.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -351,7 +514,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
-                          onPressed: _selectPolygonFile,
+                          onPressed: _selectCurrentPolygonFile,
                           child: const Text('Select File'),
                         ),
                       ],
@@ -360,6 +523,21 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            // Original Polygon Toggle
+            _buildOriginalPolygonToggle(),
+
+            const SizedBox(height: 8),
+
+            // Original Polygon Input (conditional)
+            _buildOriginalPolygonInput(),
+
+            const SizedBox(height: 8),
+
+            // Overlap Settings (conditional)
+            _buildOverlapSettings(),
 
             const SizedBox(height: 16),
 
@@ -432,6 +610,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                         value: (_progress['total'] as int? ?? 0) > 0 
                             ? (_progress['current'] as int? ?? 0) / (_progress['total'] as int? ?? 1) 
                             : null,
+                        color: AppTheme.primaryColor,
+                        backgroundColor: AppTheme.primaryColor.shade100,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -450,6 +630,14 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                           ),
                         ],
                       ),
+                      if (_includeOriginalPolygon)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            'Including overlap analysis with ${(_overlapThreshold * 100).toStringAsFixed(0)}% threshold',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.primaryColor),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -474,8 +662,9 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                     ),
                     SizedBox(height: 8),
                     Text('• Select SiPW Excel file (export_sipw_*.xlsx)'),
-                    Text('• Select polygon file (GeoJSON, Shapefile, or GeoPackage)'),
-                    Text('• Choose output location for evaluation report'),
+                    Text('• Select current polygon file (GeoJSON, Shapefile, or GeoPackage)'),
+                    Text('• Enable "Include Original Polygon" for overlap analysis'),
+                    Text('• Select output location for evaluation report'),
                     Text('• Click "Start Evaluation" to begin analysis'),
                     SizedBox(height: 8),
                     Text(
@@ -486,6 +675,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                     Text('• Records that exist only in SiPW or only in polygon'),
                     Text('• Name differences between SiPW and polygon'),
                     Text('• Polygon records without geometry'),
+                    Text('• Overlapping polygons between current and original data (if enabled)'),
                     SizedBox(height: 8),
                     Text(
                       'Output will be an Excel file with multiple sheets containing detailed results.',

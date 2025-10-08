@@ -584,19 +584,97 @@ def create_world_files_from_geojson(
             'total_files': 0
         }
         
-def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 'Evaluation Result.xlsx') -> dict:
+def find_overlapping_polygons(gdf_a, gdf_b, id_col='idsls', overlap_threshold=0.5):
+    """
+    Compare two GeoDataFrames and return polygons that overlap >= threshold 
+    with different IDs.
+    
+    Args
+    ----------
+    gdf_a, gdf_b : GeoDataFrame
+        The two GeoDataFrames to compare.
+    id_col : str
+        The column name that contains polygon IDs (e.g., 'idsls').
+    overlap_threshold : float
+        Minimum overlap ratio (0–1) to consider as significant.
+    
+    Returns
+    -------
+    GeoDataFrame
+        Contains intersecting polygons with:
+        - idsls_baru, idsls_lama: polygon IDs from each dataset
+        - area_baru, area_lama: original areas
+        - area_intersection: overlapping area
+        - ratio_baru, ratio_lama: overlap ratios relative to each polygon
+    """
+    try:
+        import geopandas as gpd
+        
+        # Reproject to metric CRS for area calculations
+        gdf_a = gdf_a.to_crs('EPSG:3857')
+        gdf_b = gdf_b.to_crs('EPSG:3857')
+
+        # Compute areas for each polygon
+        gdf_a = gdf_a.copy()
+        gdf_b = gdf_b.copy()
+        gdf_a['area_baru'] = gdf_a.geometry.area
+        gdf_b['area_lama'] = gdf_b.geometry.area
+
+        # Compute intersections (keep all geometry types)
+        intersections = gpd.overlay(gdf_a, gdf_b, how='intersection', keep_geom_type=False)
+
+        # Filter only polygon-like results
+        intersections = intersections[intersections.geometry.geom_type.isin(['Polygon', 'MultiPolygon'])]
+
+        # Compute intersection area
+        intersections['area_intersection'] = intersections.geometry.area
+
+        # Compute ratios
+        intersections['ratio_baru'] = intersections['area_intersection'] / intersections['area_baru']
+        intersections['ratio_lama'] = intersections['area_intersection'] / intersections['area_lama']
+
+        # Rename ID columns for clarity
+        intersections = intersections.rename(columns={
+            f'{id_col}_1': 'idsls_baru',
+            f'{id_col}_2': 'idsls_lama'
+        })
+
+        # Filter by overlap threshold and different IDs
+        mask = ((intersections['ratio_baru'] >= overlap_threshold) | 
+                (intersections['ratio_lama'] >= overlap_threshold)) & \
+               (intersections['idsls_baru'] != intersections['idsls_lama'])
+        result = intersections.loc[mask].copy()
+
+        # Keep relevant columns
+        cols = ['idsls_baru', 'idsls_lama', 'area_baru', 'area_lama', 'area_intersection', 'ratio_baru', 'ratio_lama']
+        result = result[cols].drop_duplicates()
+
+        return result
+        
+    except Exception as e:
+        print(f"Error in overlap analysis: {e}")
+        return None
+        
+def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path: str = 'Evaluation Result.xlsx', 
+                         original_polygon_path: str = None, overlap_threshold: float = 0.5) -> dict:
     """
     Evaluate SiPW data against polygon data and generate comparison report.
     
     Args:
         sipw_path (str): Path to the SiPW Excel file
-        polygon_path (str): Path to the polygon GeoJSON file
+        current_polygon_path (str): Path to the current polygon file
         output_path (str): Path for the output Excel file
+        original_polygon_path (str): Optional path to original polygon for overlap analysis
+        overlap_threshold (float): Threshold for overlap analysis (0-1)
     
     Returns:
         dict: Results containing evaluation statistics and any errors
     """
     try:
+        import geopandas as gpd
+        import pandas as pd
+        import os
+        
         # Check if files exist
         if not os.path.exists(sipw_path):
             return {
@@ -605,16 +683,16 @@ def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 
                 'output_file': None
             }
         
-        if not os.path.exists(polygon_path):
+        if not os.path.exists(current_polygon_path):
             return {
                 'success': False,
-                'error': f'Polygon file does not exist: {polygon_path}',
+                'error': f'Current polygon file does not exist: {current_polygon_path}',
                 'output_file': None
             }
         
         # Read data
         sipw = pd.read_excel(sipw_path, dtype=str)
-        sls = gpd.read_file(polygon_path)
+        sls_current = gpd.read_file(current_polygon_path)  # Current polygon
         
         # Ensure required columns exist
         if 'idsls' not in sipw.columns:
@@ -624,44 +702,44 @@ def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 
                 'output_file': None
             }
         
-        if 'idsls' not in sls.columns:
+        if 'idsls' not in sls_current.columns:
             return {
                 'success': False,
-                'error': 'Required column "idsls" not found in polygon file',
+                'error': 'Required column "idsls" not found in current polygon file',
                 'output_file': None
             }
         
         # Add missing columns if needed
-        if 'kdsubsls' not in sls.columns:
-            sls['kdsubsls'] = '00'
-        if 'idsubsls' not in sls.columns:
-            sls['idsubsls'] = sls['idsls'] + sls['kdsubsls']
+        if 'kdsubsls' not in sls_current.columns:
+            sls_current['kdsubsls'] = '00'
+        if 'idsubsls' not in sls_current.columns:
+            sls_current['idsubsls'] = sls_current['idsls'] + sls_current['kdsubsls']
         
         # Perform evaluations
         # 1. No geometry
-        nogeo = sls.loc[sls['geometry'].isnull(), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        nogeo = sls_current.loc[sls_current['geometry'].isnull(), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
         
         # 2. Duplicates
-        duplicate = sls.loc[sls.duplicated('idsubsls', keep=False), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        duplicate = sls_current.loc[sls_current.duplicated('idsubsls', keep=False), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
         
         # 3. Get common kecamatan codes
-        list_kec = sls['kdkec'].unique()
+        list_kec = sls_current['kdkec'].unique()
         
         # 4. Find differences between SiPW and polygon
         sipw_ids = set(sipw.loc[sipw['kdkec'].isin(list_kec), 'id_subsls']) if 'id_subsls' in sipw.columns else set()
-        poly_ids = set(sls['idsubsls'])
+        poly_ids = set(sls_current['idsubsls'])
         
         only_sipw = sipw_ids - poly_ids
         only_poly = poly_ids - sipw_ids
         
         # 5. Create dataframes for differences
         sipw_df = sipw.loc[sipw['id_subsls'].isin(only_sipw), ['id_subsls', 'nmkec', 'nmdesa', 'nama_sls']].copy() if 'id_subsls' in sipw.columns else pd.DataFrame()
-        poly_df = sls.loc[sls['idsubsls'].isin(only_poly), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
+        poly_df = sls_current.loc[sls_current['idsubsls'].isin(only_poly), ['idsubsls', 'nmkec', 'nmdesa', 'nmsls']].copy()
         
         # 6. Compare names
         compare = pd.merge(
             sipw[['idsls', 'nama_sls']] if 'nama_sls' in sipw.columns else pd.DataFrame(),
-            sls[['idsls', 'nmsls']],
+            sls_current[['idsls', 'nmsls']],
             on='idsls',
             how='inner'
         )
@@ -672,27 +750,51 @@ def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 
         else:
             compare = pd.DataFrame()
         
+        # 7. Overlap analysis (if original polygon provided)
+        overlap_df = pd.DataFrame()
+        if original_polygon_path and os.path.exists(original_polygon_path):
+            try:
+                sls_original = gpd.read_file(original_polygon_path)
+                overlap_result = find_overlapping_polygons(sls_current, sls_original, id_col='idsls', overlap_threshold=overlap_threshold)
+                if overlap_result is not None:
+                    overlap_df = overlap_result
+                    print(f"Found {len(overlap_df)} overlapping polygons")
+            except Exception as e:
+                print(f"Overlap analysis failed: {e}")
+                overlap_df = pd.DataFrame()
+        
         # Create description
         description_data = [
             ['Evaluation Report - SiPW vs Polygon', ''],
             ['Generated on', pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')],
             ['', ''],
             ['Sheet Name', 'Description'],
-            ['Duplicate', 'Contains list of duplicated idsubsls in polygon data'],
+            ['Duplicate', 'Contains list of duplicated idsubsls in current polygon data'],
             ['SiPW Only', 'Contains list of subsls that only exist in SiPW data'],
-            ['Polygon Only', 'Contains list of subsls that only exist in polygon data'],
-            ['Name Differences', 'Contains list of SLS with name differences between SiPW and Polygon'],
-            ['No Geometry', 'Contains list of subsls without geometry in polygon data'],
+            ['Polygon Only', 'Contains list of subsls that only exist in current polygon data'],
+            ['Name Differences', 'Contains list of SLS with name differences between SiPW and current Polygon'],
+            ['No Geometry', 'Contains list of subsls without geometry in current polygon data'],
+        ]
+        
+        if not overlap_df.empty:
+            description_data.extend([
+                ['Overlap Analysis', 'Contains overlapping polygons between current and original polygon data'],
+            ])
+        
+        description_data.extend([
             ['', ''],
             ['Summary Statistics', ''],
             ['Total SiPW Records', len(sipw)],
-            ['Total Polygon Records', len(sls)],
+            ['Total Current Polygon Records', len(sls_current)],
             ['Duplicated IDs', len(duplicate)],
             ['SiPW Only Records', len(sipw_df)],
             ['Polygon Only Records', len(poly_df)],
             ['Name Differences', len(compare)],
             ['Records Without Geometry', len(nogeo)]
-        ]
+        ])
+        
+        if not overlap_df.empty:
+            description_data.append(['Overlapping Polygons', len(overlap_df)])
         
         description = pd.DataFrame(description_data)
         
@@ -712,21 +814,28 @@ def evaluate_sipw_polygon(sipw_path: str, polygon_path: str, output_path: str = 
                 compare.to_excel(writer, sheet_name='Name Differences', index=False)
             if not nogeo.empty:
                 nogeo.to_excel(writer, sheet_name='No Geometry', index=False)
+            if not overlap_df.empty:
+                overlap_df.to_excel(writer, sheet_name='Overlap Analysis', index=False)
         
         # Return results
+        result_stats = {
+            'total_sipw': len(sipw),
+            'total_polygon': len(sls_current),
+            'duplicates': len(duplicate),
+            'sipw_only': len(sipw_df),
+            'polygon_only': len(poly_df),
+            'name_differences': len(compare),
+            'no_geometry': len(nogeo)
+        }
+        
+        if not overlap_df.empty:
+            result_stats['overlapping_polygons'] = len(overlap_df)
+        
         return {
             'success': True,
             'message': f'Evaluation completed successfully. Report saved to: {output_path}',
             'output_file': output_path,
-            'statistics': {
-                'total_sipw': len(sipw),
-                'total_polygon': len(sls),
-                'duplicates': len(duplicate),
-                'sipw_only': len(sipw_df),
-                'polygon_only': len(poly_df),
-                'name_differences': len(compare),
-                'no_geometry': len(nogeo)
-            }
+            'statistics': result_stats
         }
         
     except Exception as e:

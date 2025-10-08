@@ -214,39 +214,29 @@ class PythonService {
 
   static Future<Map<String, dynamic>> evaluateSipw({
     required String sipwPath,
-    required String polygonPath,
+    required String polygonPath, // This is current polygon
     String outputPath = 'Evaluation_Result.xlsx',
+    String? comparePolygonPath, // This is original polygon (optional)
+    double overlapThreshold = 0.5,
   }) async {
     try {
-      print('Sending request to evaluate_sipw endpoint...');
-      print('SiPW Path: $sipwPath');
-      print('Polygon Path: $polygonPath');
-      print('Output Path: $outputPath');
+      final Map<String, dynamic> requestBody = {
+        'sipw_path': sipwPath,
+        'polygon_path': polygonPath, // Current polygon
+        'output_path': outputPath,
+        'overlap_threshold': overlapThreshold,
+      };
 
-      // First, test the connection
-      final testResponse = await http.get(
-        Uri.parse('http://localhost:5000/health'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (testResponse.statusCode != 200) {
-        return {
-          'error': 'Server is not responding. Status: ${testResponse.statusCode}',
-        };
+      // Add optional compare polygon path if provided
+      if (comparePolygonPath != null && comparePolygonPath.isNotEmpty) {
+        requestBody['compare_polygon_path'] = comparePolygonPath;
       }
 
       final response = await http.post(
         Uri.parse('http://localhost:5000/evaluate_sipw'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'sipw_path': sipwPath,
-          'polygon_path': polygonPath,
-          'output_path': outputPath,
-        }),
+        body: jsonEncode(requestBody),
       );
-
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -256,7 +246,6 @@ class PythonService {
         };
       }
     } catch (e) {
-      print('Error in evaluateSipw: $e');
       return {
         'error': 'Failed to connect to server: $e',
       };

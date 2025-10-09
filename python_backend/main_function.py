@@ -584,10 +584,10 @@ def create_world_files_from_geojson(
             'total_files': 0
         }
         
-def find_overlapping_polygons(gdf_a, gdf_b, id_col='idsls', overlap_threshold=0.5):
+def find_overlapping_polygons(gdf_a, gdf_b, id_col='idsls', overlap_threshold=0.5, same_id_threshold=0.1):
     """
     Compare two GeoDataFrames and return polygons that overlap >= threshold 
-    with different IDs.
+    with different IDs AND same IDs with shape changes.
     
     Args
     ----------
@@ -596,16 +596,15 @@ def find_overlapping_polygons(gdf_a, gdf_b, id_col='idsls', overlap_threshold=0.
     id_col : str
         The column name that contains polygon IDs (e.g., 'idsls').
     overlap_threshold : float
-        Minimum overlap ratio (0–1) to consider as significant.
+        Minimum overlap ratio (0–1) to consider as significant overlap for different IDs.
+    same_id_threshold : float
+        Minimum area change ratio (0–1) to detect shape changes for same IDs.
     
     Returns
     -------
-    GeoDataFrame
-        Contains intersecting polygons with:
-        - idsls_baru, idsls_lama: polygon IDs from each dataset
-        - area_baru, area_lama: original areas
-        - area_intersection: overlapping area
-        - ratio_baru, ratio_lama: overlap ratios relative to each polygon
+    tuple
+        - different_ids_df: GeoDataFrame with overlapping polygons with different IDs
+        - same_ids_df: GeoDataFrame with same ID polygons with significant shape changes
     """
     try:
         import geopandas as gpd
@@ -639,24 +638,46 @@ def find_overlapping_polygons(gdf_a, gdf_b, id_col='idsls', overlap_threshold=0.
             f'{id_col}_2': 'idsls_lama'
         })
 
-        # Filter by overlap threshold and different IDs
-        mask = ((intersections['ratio_baru'] >= overlap_threshold) | 
-                (intersections['ratio_lama'] >= overlap_threshold)) & \
-               (intersections['idsls_baru'] != intersections['idsls_lama'])
-        result = intersections.loc[mask].copy()
+        # 1. Different IDs with overlap threshold
+        mask_different = ((intersections['ratio_baru'] >= overlap_threshold) | 
+                         (intersections['ratio_lama'] >= overlap_threshold)) & \
+                        (intersections['idsls_baru'] != intersections['idsls_lama'])
+        different_ids_df = intersections.loc[mask_different].copy()
 
-        # Keep relevant columns
-        cols = ['idsls_baru', 'idsls_lama', 'area_baru', 'area_lama', 'area_intersection', 'ratio_baru', 'ratio_lama']
-        result = result[cols].drop_duplicates()
+        # Keep relevant columns for different IDs
+        diff_cols = ['idsls_baru', 'idsls_lama', 'area_baru', 'area_lama', 'area_intersection', 'ratio_baru', 'ratio_lama']
+        if not different_ids_df.empty:
+            different_ids_df = different_ids_df[diff_cols].drop_duplicates()
+        else:
+            different_ids_df = pd.DataFrame(columns=diff_cols)
 
-        return result
+        # 2. Same IDs with shape changes
+        mask_same = (intersections['idsls_baru'] == intersections['idsls_lama'])
+        same_ids_df = intersections.loc[mask_same].copy()
+        
+        if not same_ids_df.empty:
+            # Calculate area change ratio (how much the polygon has changed)
+            same_ids_df['area_change_ratio'] = 1 - (same_ids_df['area_intersection'] / 
+                                                   ((same_ids_df['area_baru'] + same_ids_df['area_lama']) / 2))
+            
+            # Filter by same ID threshold
+            same_ids_df = same_ids_df[same_ids_df['area_change_ratio'] >= same_id_threshold]
+            
+            # Keep relevant columns for same IDs
+            same_cols = ['idsls_baru', 'area_baru', 'area_lama', 'area_intersection', 'area_change_ratio']
+            same_ids_df = same_ids_df[same_cols].rename(columns={'idsls_baru': 'idsls'}).drop_duplicates()
+        else:
+            same_ids_df = pd.DataFrame(columns=['idsls', 'area_baru', 'area_lama', 'area_intersection', 'area_change_ratio'])
+
+        return different_ids_df, same_ids_df
         
     except Exception as e:
         print(f"Error in overlap analysis: {e}")
-        return None
-        
+        return pd.DataFrame(), pd.DataFrame()
+
 def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path: str = 'Evaluation Result.xlsx', 
-                         original_polygon_path: str = None, overlap_threshold: float = 0.5) -> dict:
+                         original_polygon_path: str = None, overlap_threshold: float = 0.5, 
+                         same_id_threshold: float = 0.1) -> dict:
     """
     Evaluate SiPW data against polygon data and generate comparison report.
     
@@ -665,7 +686,8 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
         current_polygon_path (str): Path to the current polygon file
         output_path (str): Path for the output Excel file
         original_polygon_path (str): Optional path to original polygon for overlap analysis
-        overlap_threshold (float): Threshold for overlap analysis (0-1)
+        overlap_threshold (float): Threshold for overlap analysis for different IDs (0-1)
+        same_id_threshold (float): Threshold for detecting shape changes in same IDs (0-1)
     
     Returns:
         dict: Results containing evaluation statistics and any errors
@@ -751,17 +773,24 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
             compare = pd.DataFrame()
         
         # 7. Overlap analysis (if original polygon provided)
-        overlap_df = pd.DataFrame()
+        overlap_diff_df = pd.DataFrame()
+        overlap_same_df = pd.DataFrame()
         if original_polygon_path and os.path.exists(original_polygon_path):
             try:
                 sls_original = gpd.read_file(original_polygon_path)
-                overlap_result = find_overlapping_polygons(sls_current, sls_original, id_col='idsls', overlap_threshold=overlap_threshold)
-                if overlap_result is not None:
-                    overlap_df = overlap_result
-                    print(f"Found {len(overlap_df)} overlapping polygons")
+                overlap_diff_df, overlap_same_df = find_overlapping_polygons(
+                    sls_current, 
+                    sls_original, 
+                    id_col='idsls', 
+                    overlap_threshold=overlap_threshold,
+                    same_id_threshold=same_id_threshold
+                )
+                print(f"Found {len(overlap_diff_df)} overlapping polygons with different IDs")
+                print(f"Found {len(overlap_same_df)} polygons with same ID but shape changes")
             except Exception as e:
                 print(f"Overlap analysis failed: {e}")
-                overlap_df = pd.DataFrame()
+                overlap_diff_df = pd.DataFrame()
+                overlap_same_df = pd.DataFrame()
         
         # Create description
         description_data = [
@@ -776,9 +805,14 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
             ['No Geometry', 'Contains list of subsls without geometry in current polygon data'],
         ]
         
-        if not overlap_df.empty:
+        if not overlap_diff_df.empty:
             description_data.extend([
-                ['Overlap Analysis', 'Contains overlapping polygons between current and original polygon data'],
+                ['Overlap Different IDs', 'Contains overlapping polygons between current and original with different IDs'],
+            ])
+        
+        if not overlap_same_df.empty:
+            description_data.extend([
+                ['Overlap Same IDs', 'Contains polygons with same ID but significant shape changes'],
             ])
         
         description_data.extend([
@@ -793,8 +827,11 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
             ['Records Without Geometry', len(nogeo)]
         ])
         
-        if not overlap_df.empty:
-            description_data.append(['Overlapping Polygons', len(overlap_df)])
+        if not overlap_diff_df.empty:
+            description_data.append(['Overlapping Polygons (Different IDs)', len(overlap_diff_df)])
+        
+        if not overlap_same_df.empty:
+            description_data.append(['Polygons with Shape Changes (Same ID)', len(overlap_same_df)])
         
         description = pd.DataFrame(description_data)
         
@@ -814,8 +851,10 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
                 compare.to_excel(writer, sheet_name='Name Differences', index=False)
             if not nogeo.empty:
                 nogeo.to_excel(writer, sheet_name='No Geometry', index=False)
-            if not overlap_df.empty:
-                overlap_df.to_excel(writer, sheet_name='Overlap Analysis', index=False)
+            if not overlap_diff_df.empty:
+                overlap_diff_df.to_excel(writer, sheet_name='Overlap Different IDs', index=False)
+            if not overlap_same_df.empty:
+                overlap_same_df.to_excel(writer, sheet_name='Overlap Same IDs', index=False)
         
         # Return results
         result_stats = {
@@ -828,8 +867,11 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
             'no_geometry': len(nogeo)
         }
         
-        if not overlap_df.empty:
-            result_stats['overlapping_polygons'] = len(overlap_df)
+        if not overlap_diff_df.empty:
+            result_stats['overlapping_polygons_diff'] = len(overlap_diff_df)
+        
+        if not overlap_same_df.empty:
+            result_stats['overlapping_polygons_same'] = len(overlap_same_df)
         
         return {
             'success': True,
@@ -842,5 +884,184 @@ def evaluate_sipw_polygon(sipw_path: str, current_polygon_path: str, output_path
         return {
             'success': False,
             'error': f'Error during evaluation: {str(e)}',
+            'output_file': None
+        }
+        
+def generate_sipw_report(sipw_path: str, output_path: str = 'SIPW_Report.xlsx', progress_callback=None) -> dict:
+    """
+    Generate comprehensive report from SiPW Excel data.
+    
+    Args:
+        sipw_path (str): Path to the SiPW Excel file
+        output_path (str): Path for the output Excel file
+        progress_callback (callable): Optional callback for progress updates
+    
+    Returns:
+        dict: Results containing report statistics and any errors
+    """
+    try:
+        import pandas as pd
+        import os
+        
+        def update_progress(message, current, total):
+            if progress_callback:
+                progress_callback(message, current, total)
+        
+        # Check if file exists
+        if not os.path.exists(sipw_path):
+            return {
+                'success': False,
+                'error': f'SiPW file does not exist: {sipw_path}',
+                'output_file': None
+            }
+        
+        update_progress('Reading SiPW data...', 1, 6)
+        
+        # Read data
+        sipw = pd.read_excel(sipw_path)
+        
+        # Ensure required columns exist
+        required_columns = ['kdkec', 'nmkec', 'idsls', 'id_subsls']
+        missing_columns = [col for col in required_columns if col not in sipw.columns]
+        if missing_columns:
+            return {
+                'success': False,
+                'error': f'Required columns missing: {missing_columns}',
+                'output_file': None
+            }
+        
+        update_progress('Processing kecamatan data...', 2, 6)
+        
+        # Convert kdkec to string with leading zeros
+        sipw['kdkec'] = sipw['kdkec'].astype(str).str.zfill(3)
+        
+        # 1. Jumlah SLS/Sub-SLS per Kecamatan
+        results_jumlah = []
+        kecamatan_list = sipw['kdkec'].unique()
+        
+        for i, kec in enumerate(kecamatan_list):
+            kec_data = sipw.loc[sipw['kdkec'] == kec]
+            results_jumlah.append({
+                'kdkec': kec,
+                'nmkec': kec_data['nmkec'].iloc[0],
+                'jumlah_sls': len(kec_data['idsls'].unique()),
+                'jumlah_subsls': len(kec_data['id_subsls'].unique())
+            })
+            
+            # Update progress for each kecamatan
+            if i % 5 == 0:  # Update every 5 kecamatan to avoid too many updates
+                update_progress(f'Processing kecamatan {i+1}/{len(kecamatan_list)}...', 2, 6)
+        
+        jml = pd.DataFrame(results_jumlah)
+        
+        update_progress('Calculating muatan statistics...', 3, 6)
+        
+        # 2. Muatan statistics per Kecamatan
+        results_muatan = []
+        muatan_columns = ['muatan_total', 'muatan_usaha']
+        available_muatan_cols = [col for col in muatan_columns if col in sipw.columns]
+        
+        for kec in kecamatan_list:
+            kec_data = sipw.loc[sipw['kdkec'] == kec]
+            result = {
+                'kdkec': kec,
+                'nmkec': kec_data['nmkec'].iloc[0]
+            }
+            
+            # Add muatan statistics if columns exist
+            for col in available_muatan_cols:
+                result[f'total_{col}'] = kec_data[col].sum()
+                result[f'mean_{col}'] = kec_data[col].mean()
+            
+            results_muatan.append(result)
+        
+        muatan = pd.DataFrame(results_muatan)
+        
+        update_progress('Analyzing economic concentration...', 4, 6)
+        
+        # 3. Konsentrasi Ekonomi (muatan_dominan)
+        results_konsentrasi = []
+        if 'muatan_dominan' in sipw.columns:
+            all_categories = range(1, 14)
+            count_table = pd.crosstab(sipw['kdkec'], sipw['muatan_dominan'])
+            count_table = count_table.reindex(columns=all_categories, fill_value=0).reset_index()
+            count_table.columns.name = None
+            
+            # Merge with kecamatan names
+            konek = pd.merge(jml[['kdkec', 'nmkec']], count_table, on='kdkec')
+        else:
+            konek = pd.DataFrame()
+        
+        update_progress('Creating report description...', 5, 6)
+        
+        # Create description
+        description_data = [
+            ['Laporan Analisis SiPW', ''],
+            ['Generated on', pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')],
+            ['File Source', os.path.basename(sipw_path)],
+            ['', ''],
+            ['Sheet Name', 'Description'],
+            ['jumlah', 'Rekapitulasi Jumlah SLS/Sub-SLS per Kecamatan'],
+            ['muatan', 'Rekapitulasi Statistik Muatan per Kecamatan'],
+        ]
+        
+        if not konek.empty:
+            description_data.append(['konsentrasi', 'Rekapitulasi Wilayah Konsentrasi Ekonomi per Kategori Dominan'])
+        
+        description_data.extend([
+            ['', ''],
+            ['Summary Statistics', ''],
+            ['Total Kecamatan', len(kecamatan_list)],
+            ['Total SLS', len(sipw['idsls'].unique())],
+            ['Total Sub-SLS', len(sipw['id_subsls'].unique())],
+        ])
+        
+        if 'muatan_total' in sipw.columns:
+            description_data.extend([
+                ['Total Muatan', sipw['muatan_total'].sum()],
+                ['Rata-rata Muatan per Sub-SLS', sipw['muatan_total'].mean()],
+            ])
+        
+        description = pd.DataFrame(description_data)
+        
+        update_progress('Writing to Excel file...', 6, 6)
+        
+        # Write to Excel
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            # Description sheet
+            description.to_excel(writer, sheet_name='Description', index=False, header=False)
+            
+            # Data sheets
+            if not jml.empty:
+                jml.to_excel(writer, sheet_name='jumlah', index=False)
+            if not muatan.empty:
+                muatan.to_excel(writer, sheet_name='muatan', index=False)
+            if not konek.empty:
+                konek.to_excel(writer, sheet_name='konsentrasi', index=False)
+        
+        # Return results
+        result_stats = {
+            'total_kecamatan': len(kecamatan_list),
+            'total_sls': len(sipw['idsls'].unique()),
+            'total_subsls': len(sipw['id_subsls'].unique()),
+        }
+        
+        if 'muatan_total' in sipw.columns:
+            result_stats.update({
+                'total_muatan': float(sipw['muatan_total'].sum()),
+                'mean_muatan': float(sipw['muatan_total'].mean())
+            })
+        
+        return {
+            'success': True,
+            'message': f'SiPW report generated successfully. Saved to: {output_path}',
+            'output_file': output_path,
+            'statistics': result_stats
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Error generating SiPW report: {str(e)}',
             'output_file': None
         }

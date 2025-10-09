@@ -12,6 +12,7 @@ import 'geo_analysis_screen.dart';
 import 'georef_screen.dart';
 import 'organize_screen.dart';
 import 'evaluation_screen.dart';
+import 'report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -232,6 +233,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 subtitle: const Text('Compare SiPW data with polygon data'),
                 trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EvaluationScreen())),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            CustomCard(
+              child: ListTile(
+                leading: const Icon(Icons.summarize, color: AppTheme.primaryColor),
+                title: const Text('SiPW Report Generator'),
+                subtitle: const Text('Generate summary table for reports'),
+                trailing: const Icon(Icons.arrow_forward, color: AppTheme.primaryColor,),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportScreen())),
               ),
             ),
 

@@ -19,6 +19,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   String _originalPolygonFilePath = '';
   String _outputPath = 'Evaluation_Result.xlsx';
   double _overlapThreshold = 0.5;
+  double _sameIdThreshold = 0.1;
   bool _isProcessing = false;
   bool _includeOriginalPolygon = false;
   StreamSubscription? _progressSubscription;
@@ -27,11 +28,24 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   Timer? _processTimeoutTimer;
   Map<String, dynamic>? _statistics;
 
+  final TextEditingController _overlapController = TextEditingController();
+  final TextEditingController _sameIdController = TextEditingController();
+
   final List<String> _supportedPolygonFormats = ['geojson', 'json', 'gpkg', 'shp'];
   final List<String> _supportedSipwFormats = ['xlsx', 'xls'];
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize controllers with current values
+    _overlapController.text = (_overlapThreshold * 100).toStringAsFixed(0);
+    _sameIdController.text = (_sameIdThreshold * 100).toStringAsFixed(0);
+  }
+
+  @override
   void dispose() {
+    _overlapController.dispose();
+    _sameIdController.dispose();
     _progressSubscription?.cancel();
     _processTimeoutTimer?.cancel();
     super.dispose();
@@ -82,7 +96,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   Future<void> _selectOutputFile() async {
     final String? selectedPath = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Evaluation Report As',
-      fileName: _outputPath,
+      fileName: _getSafeFileName(_outputPath),
       allowedExtensions: ['xlsx'],
     );
     
@@ -91,6 +105,22 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
         _outputPath = selectedPath.endsWith('.xlsx') ? selectedPath : '$selectedPath.xlsx';
       });
     }
+  }
+
+  String _getSafeFileName(String path) {
+    // Extract just the file name from the path
+    String fileName = path.split(RegExp(r'[\\/]')).last;
+    
+    // Remove or replace reserved characters
+    final reservedChars = RegExp(r'[<>:"/\\|?*]');
+    fileName = fileName.replaceAll(reservedChars, '_');
+    
+    // Ensure the file name is not empty
+    if (fileName.isEmpty) {
+      fileName = 'SIPW_Report.xlsx';
+    }
+    
+    return fileName;
   }
 
   void _listenForProgress() {
@@ -131,7 +161,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     });
   }
 
-  Future<void> _startEvaluation() async {
+Future<void> _startEvaluation() async {
     if (_sipwFilePath.isEmpty || _currentPolygonFilePath.isEmpty) {
       _showError('Error', 'Please select both SiPW file and current polygon file');
       return;
@@ -164,6 +194,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
         outputPath: _outputPath,
         comparePolygonPath: _includeOriginalPolygon ? _originalPolygonFilePath : null,
         overlapThreshold: _overlapThreshold,
+        sameIdThreshold: _sameIdThreshold, // Add new parameter
       );
 
       if (startResult.containsKey('error')) {
@@ -225,8 +256,10 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                 Text('• Polygon Only Records: ${_statistics!['polygon_only']}'),
                 Text('• Name Differences: ${_statistics!['name_differences']}'),
                 Text('• Records Without Geometry: ${_statistics!['no_geometry']}'),
-                if (_statistics!.containsKey('overlapping_polygons'))
-                  Text('• Overlapping Polygons: ${_statistics!['overlapping_polygons']}'),
+                if (_statistics!.containsKey('overlapping_polygons_diff'))
+                  Text('• Overlapping Polygons (Different IDs): ${_statistics!['overlapping_polygons_diff']}'),
+                if (_statistics!.containsKey('overlapping_polygons_same'))
+                  Text('• Polygons with Shape Changes (Same ID): ${_statistics!['overlapping_polygons_same']}'),
               ],
             ],
           ),
@@ -262,7 +295,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Include Original Polygon',
+                    'Compare to Original Polygon',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   Text(
@@ -339,49 +372,165 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
               title: 'Overlap Analysis Settings',
               subtitle: 'Configure overlap detection sensitivity',
             ),
-            const SizedBox(height: 16),
-            
-            // Overlap Threshold Slider
-            Text(
-              'Overlap Threshold: ${(_overlapThreshold * 100).toStringAsFixed(0)}%',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Slider(
-              value: _overlapThreshold,
-              min: 0.1,
-              max: 1.0,
-              divisions: 9,
-              label: '${(_overlapThreshold * 100).toStringAsFixed(0)}%',
-              onChanged: _isProcessing ? null : (double value) {
+            const SizedBox(height: 20),
+
+            // Overlap Threshold (Different IDs)
+            _buildThresholdSection(
+              title: 'Overlap Threshold (Different IDs)',
+              subtitle: 'Minimum overlap ratio to detect overlapping polygons with different IDs',
+              currentValue: _overlapThreshold,
+              onChanged: (value) {
                 setState(() {
                   _overlapThreshold = value;
+                  _overlapController.text = (_overlapThreshold * 100).toStringAsFixed(0);
                 });
               },
-              activeColor: AppTheme.primaryColor,
-              inactiveColor: AppTheme.primaryColor.shade100,
+              isProcessing: _isProcessing,
+              controller: _overlapController,
+              min: 0.01,
+              max: 1.0,
+              quickSelectValues: [0.1, 0.3, 0.5, 0.7, 0.9], // 10%, 30%, 50%, 70%, 90%
             ),
-            const SizedBox(height: 8),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('10%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                Text('50%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                Text('100%', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Minimum overlap ratio to consider as significant overlap between current and original polygons.',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+
+            const SizedBox(height: 24),
+
+            // Same ID Threshold
+            _buildThresholdSection(
+              title: 'Shape Change Threshold (Same IDs)',
+              subtitle: 'Minimum area change ratio to detect shape changes in polygons with same IDs',
+              currentValue: _sameIdThreshold,
+              onChanged: (value) {
+                setState(() {
+                  _sameIdThreshold = value;
+                  _sameIdController.text = (_sameIdThreshold * 100).toStringAsFixed(0);
+                });
+              },
+              isProcessing: _isProcessing,
+              controller: _sameIdController,
+              min: 0.01,
+              max: 1.0,
+              quickSelectValues: [0.05, 0.1, 0.2, 0.3, 0.5], // 5%, 10%, 20%, 30%, 50%
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildThresholdSection({
+    required String title,
+    required String subtitle,
+    required double currentValue,
+    required ValueChanged<double> onChanged,
+    required bool isProcessing,
+    required TextEditingController controller,
+    required double min,
+    required double max,
+    required List<double> quickSelectValues,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        
+        // Current value display
+        Text(
+          '${(currentValue * 100).toStringAsFixed(0)}%',
+          style: AppTheme.heading3.copyWith(color: AppTheme.textSelected),
+        ),
+        const SizedBox(height: 16),
+
+        // Slider
+        Slider(
+          value: currentValue,
+          min: min,
+          max: max,
+          divisions: (max * 100 - min * 100).round(), // 1% increments
+          label: '${(currentValue * 100).toStringAsFixed(0)}%',
+          onChanged: isProcessing ? null : onChanged,
+          activeColor: AppTheme.primaryColor,
+          inactiveColor: AppTheme.primaryColor.shade100,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('${(min * 100).toStringAsFixed(0)}%', style: AppTheme.bodySmall),
+            Text('${((min + max) / 2 * 100).toStringAsFixed(0)}%', style: AppTheme.bodySmall),
+            Text('${(max * 100).toStringAsFixed(0)}%', style: AppTheme.bodySmall),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Quick select buttons
+        Text('Quick Select:', style: AppTheme.bodyMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: quickSelectValues.map((value) {
+            return ElevatedButton(
+              onPressed: isProcessing ? null : () {
+                onChanged(value);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: currentValue == value 
+                    ? AppTheme.primaryColor 
+                    : AppTheme.primaryColor.shade100,
+                foregroundColor: currentValue == value 
+                    ? AppTheme.backgroundColor 
+                    : AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: Text('${(value * 100).toStringAsFixed(0)}%'),
+            );
+          }).toList(),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Manual input
+        Row(
+          children: [
+            const Text('Custom Value:', style: AppTheme.bodyMedium),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                enabled: !isProcessing,
+                decoration: AppTheme.textInputDecoration.copyWith(
+                  suffixText: '%',
+                  hintText: 'Enter percentage',
+                ),
+                onChanged: (value) {
+                  final parsed = double.tryParse(value);
+                  if (parsed != null && parsed >= min * 100 && parsed <= max * 100) {
+                    onChanged(parsed / 100);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -406,8 +555,10 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             _buildStatItem('Polygon Only Records', _statistics!['polygon_only'].toString(), isWarning: true),
             _buildStatItem('Name Differences', _statistics!['name_differences'].toString(), isWarning: true),
             _buildStatItem('No Geometry Records', _statistics!['no_geometry'].toString(), isWarning: true),
-            if (_statistics!.containsKey('overlapping_polygons'))
-              _buildStatItem('Overlapping Polygons', _statistics!['overlapping_polygons'].toString(), isWarning: true),
+            if (_statistics!.containsKey('overlapping_polygons_diff'))
+              _buildStatItem('Overlapping Polygons (Different IDs)', _statistics!['overlapping_polygons_diff'].toString(), isWarning: true),
+            if (_statistics!.containsKey('overlapping_polygons_same'))
+              _buildStatItem('Polygons with Shape Changes (Same ID)', _statistics!['overlapping_polygons_same'].toString(), isWarning: true),
           ],
         ),
       ),

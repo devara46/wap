@@ -514,7 +514,56 @@ def evaluate_sipw_endpoint():
         })
         return jsonify({'error': str(e)}), 500
 
-def run_sipw_evaluation_background(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold):
+@app.route('/evaluate_sipw', methods=['POST'])
+def evaluate_sipw_endpoint():
+    """Evaluate SiPW data against polygon data with optional overlap analysis"""
+    global processing_status
+    
+    if processing_status['is_processing']:
+        return jsonify({'error': 'Another process is already running'}), 400
+    
+    try:
+        data = request.get_json()
+        sipw_path = data.get('sipw_path')
+        polygon_path = data.get('polygon_path')  # This should be current polygon
+        output_path = data.get('output_path', 'Evaluation_Result.xlsx')
+        compare_polygon_path = data.get('compare_polygon_path')  # This is original polygon
+        overlap_threshold = data.get('overlap_threshold', 0.5)
+        same_id_threshold = data.get('same_id_threshold', 0.1)  # New parameter
+        
+        if not sipw_path or not polygon_path:
+            return jsonify({'error': 'Both SiPW file and current polygon file are required'}), 400
+        
+        # Reset processing status
+        processing_status.update({
+            'is_processing': True,
+            'current': 0,
+            'total': 0,
+            'message': 'Starting SiPW evaluation...',
+            'error': None
+        })
+        
+        # Start processing in background thread
+        thread = threading.Thread(
+            target=run_sipw_evaluation_background,
+            args=(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold, same_id_threshold),
+            daemon=True
+        )
+        thread.start()
+        
+        return jsonify({
+            'message': 'SiPW evaluation started in background',
+            'status': 'started'
+        })
+        
+    except Exception as e:
+        processing_status.update({
+            'error': str(e),
+            'is_processing': False
+        })
+        return jsonify({'error': str(e)}), 500
+
+def run_sipw_evaluation_background(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold, same_id_threshold):
     """Run SiPW evaluation in background with progress updates"""
     global processing_status
     
@@ -532,7 +581,8 @@ def run_sipw_evaluation_background(sipw_path, polygon_path, output_path, compare
             polygon_path,  # This is current polygon
             output_path, 
             compare_polygon_path,  # This is original polygon (optional)
-            overlap_threshold
+            overlap_threshold,
+            same_id_threshold  # Add new parameter
         )
         
         if result['success']:
@@ -553,6 +603,46 @@ def run_sipw_evaluation_background(sipw_path, polygon_path, output_path, compare
     except Exception as e:
         processing_status.update({
             'error': f'Error in SiPW evaluation: {str(e)}',
+            'is_processing': False
+        })
+
+def run_sipw_report_background(sipw_path, output_path):
+    """Run SiPW report generation in background with progress updates"""
+    global processing_status
+    
+    def progress_callback(message, current, total):
+        processing_status.update({
+            'message': message,
+            'current': current,
+            'total': total
+        })
+    
+    try:
+        # Process the report generation with progress updates
+        result = main_function.generate_sipw_report(
+            sipw_path, 
+            output_path,
+            progress_callback=progress_callback
+        )
+        
+        if result['success']:
+            stats = result.get('statistics', {})
+            processing_status.update({
+                'message': result['message'],
+                'current': 6,
+                'total': 6,
+                'is_processing': False,
+                'statistics': stats
+            })
+        else:
+            processing_status.update({
+                'error': result['error'],
+                'is_processing': False
+            })
+            
+    except Exception as e:
+        processing_status.update({
+            'error': f'Error in SiPW report generation: {str(e)}',
             'is_processing': False
         })
 

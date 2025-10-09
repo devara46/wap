@@ -28,6 +28,11 @@ This app was created to help processing Wilkerstat data, be it images or other g
   - Records only in SiPW
   - Duplicated IDs
   - Records with no polygon
+  - Customized overlap with different ID identification
+- Reports generator
+  - Rekapitulasi Jumlah SLS/Non-SLS/Sub-SLS
+  - Rekapitulasi Rata-rata Muatan
+  - Rekapitulasi Wilayah Konsentrasi Ekonomi per Dominan 
 
 ## Future Plan
 

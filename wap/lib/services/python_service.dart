@@ -214,28 +214,48 @@ class PythonService {
 
   static Future<Map<String, dynamic>> evaluateSipw({
     required String sipwPath,
-    required String polygonPath, // This is current polygon
-    String outputPath = 'Evaluation_Result.xlsx',
-    String? comparePolygonPath, // This is original polygon (optional)
+    required String polygonPath,
+    required String outputPath,
+    String? comparePolygonPath,
     double overlapThreshold = 0.5,
+    double sameIdThreshold = 0.1, // Add new parameter
   }) async {
     try {
-      final Map<String, dynamic> requestBody = {
-        'sipw_path': sipwPath,
-        'polygon_path': polygonPath, // Current polygon
-        'output_path': outputPath,
-        'overlap_threshold': overlapThreshold,
-      };
-
-      // Add optional compare polygon path if provided
-      if (comparePolygonPath != null && comparePolygonPath.isNotEmpty) {
-        requestBody['compare_polygon_path'] = comparePolygonPath;
-      }
-
       final response = await http.post(
-        Uri.parse('http://localhost:5000/evaluate_sipw'),
+        Uri.parse('$baseUrl/evaluate_sipw'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestBody),
+        body: json.encode({
+          'sipw_path': sipwPath,
+          'polygon_path': polygonPath,
+          'output_path': outputPath,
+          'compare_polygon_path': comparePolygonPath,
+          'overlap_threshold': overlapThreshold,
+          'same_id_threshold': sameIdThreshold, // Add new parameter
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        return {'error': 'HTTP ${response.statusCode}: ${response.body}'};
+      }
+    } catch (e) {
+      return {'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> generateSipwReport({
+    required String sipwPath,
+    String outputPath = 'SIPW_Report.xlsx',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/generate_sipw_report'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'sipw_path': sipwPath,
+          'output_path': outputPath,
+        }),
       );
 
       if (response.statusCode == 200) {

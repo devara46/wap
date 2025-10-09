@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Colors
-  static const MaterialColor primaryColor = Colors.purple;
+  static const MaterialColor primaryColor = Colors.pink;
   static const MaterialColor secondaryColor = Colors.green;
-  static const MaterialColor accentColor = Colors.orange;
+  static const MaterialColor accentColor = Colors.teal;
   static const Color backgroundColor = Colors.white;
   static const MaterialColor backgroundColorInactive = Colors.grey;
   static const Color cardColor = Colors.white;
   static const Color textPrimary = Colors.black87;
   static const Color textSecondary = Colors.grey;
-  static const Color textSelected = Colors.purple;
+  static const Color textSelected = Colors.pink;
   static const Color textInverse = Colors.white;
   static const Color successColor = Colors.green;
   static const Color warningColor = Colors.orange;

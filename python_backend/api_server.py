@@ -465,54 +465,6 @@ def run_world_files_creation_background(geojson_path, output_dir, file_extension
             'error': f'Error in world file creation: {str(e)}',
             'is_processing': False
         })
-        
-@app.route('/evaluate_sipw', methods=['POST'])
-def evaluate_sipw_endpoint():
-    """Evaluate SiPW data against polygon data with optional overlap analysis"""
-    global processing_status
-    
-    if processing_status['is_processing']:
-        return jsonify({'error': 'Another process is already running'}), 400
-    
-    try:
-        data = request.get_json()
-        sipw_path = data.get('sipw_path')
-        polygon_path = data.get('polygon_path')  # This should be current polygon
-        output_path = data.get('output_path', 'Evaluation_Result.xlsx')
-        compare_polygon_path = data.get('compare_polygon_path')  # This is original polygon
-        overlap_threshold = data.get('overlap_threshold', 0.5)
-        
-        if not sipw_path or not polygon_path:
-            return jsonify({'error': 'Both SiPW file and current polygon file are required'}), 400
-        
-        # Reset processing status
-        processing_status.update({
-            'is_processing': True,
-            'current': 0,
-            'total': 0,
-            'message': 'Starting SiPW evaluation...',
-            'error': None
-        })
-        
-        # Start processing in background thread
-        thread = threading.Thread(
-            target=run_sipw_evaluation_background,
-            args=(sipw_path, polygon_path, output_path, compare_polygon_path, overlap_threshold),
-            daemon=True
-        )
-        thread.start()
-        
-        return jsonify({
-            'message': 'SiPW evaluation started in background',
-            'status': 'started'
-        })
-        
-    except Exception as e:
-        processing_status.update({
-            'error': str(e),
-            'is_processing': False
-        })
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/evaluate_sipw', methods=['POST'])
 def evaluate_sipw_endpoint():
